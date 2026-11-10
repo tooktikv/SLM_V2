@@ -1,0 +1,246 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+/* Design tokens (Supplier Portal): semantic color, type, radius and elevation scales used across the app. */
+@theme {
+  --font-sans: 'IBM Plex Sans', 'IBM Plex Sans Thai', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Brand (primary blue #144BC1) */
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dde9ff;
+  --color-brand-200: #bed2fb;
+  --color-brand-300: #93b5ee;
+  --color-brand-400: #5e8de0;
+  --color-brand-500: #2f66d0;
+  --color-brand-600: #144bc1;
+  --color-brand-700: #103b9a;
+  --color-brand-800: #0c2d75;
+
+  /* Status */
+  --color-success-50: #eaf7f0;
+  --color-success-200: #b9e2cc;
+  --color-success-500: #2e9b6a;
+  --color-success-600: #18794e;
+  --color-success-700: #125f3e;
+
+  --color-warning-50: #fff8ec;
+  --color-warning-200: #f0d7a8;
+  --color-warning-500: #d9951b;
+  --color-warning-600: #8a5b08;
+  --color-warning-700: #6e4806;
+
+  --color-danger-50: #fff0f1;
+  --color-danger-200: #f1bcc3;
+  --color-danger-500: #d04455;
+  --color-danger-600: #b42332;
+  --color-danger-700: #921c29;
+
+  --color-info-50: #eef4ff;
+  --color-info-200: #bed2fb;
+  --color-info-500: #5e8de0;
+  --color-info-600: #144bc1;
+  --color-info-700: #103b9a;
+
+  /* Neutrals */
+  --color-canvas: #f6f9fd;
+  --color-surface: #ffffff;
+  --color-sunken: #f0f3f7;
+  --color-line: #dfe6ef;
+  --color-line-subtle: #edf1f6;
+  --color-control: #b8c5d6;
+  --color-ink: #1d2d44;
+  --color-ink-soft: #526580;
+  --color-ink-muted: #60728b;
+  --color-ink-faint: #9aa7b8;
+
+  /* Sidebar navigation */
+  --color-nav: #124a80;
+  --color-nav-hover: #245b8d;
+  --color-nav-active: #3d6998;
+  --color-nav-muted: #a9c1da;
+
+  /* Type scale */
+  --text-micro: 0.75rem;
+  --text-micro--line-height: 1rem;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+
+  /* Shape and elevation */
+  --radius-control: 0.5rem;
+  --radius-card: 0.75rem;
+  --shadow-card: 0 4px 16px 0 rgb(29 45 68 / 0.04);
+  --shadow-popover: 0 8px 24px 0 rgb(29 45 68 / 0.12);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink-soft);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+
+  :where(a, button, input, select, textarea, summary, [tabindex]:not([tabindex='-1'])):focus-visible {
+    outline: 3px solid rgb(147 181 238 / 0.5);
+    outline-offset: 0;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #b8c5d6;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #9aa7b8;
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  .ui-checkbox {
+    appearance: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    border: 1px solid var(--color-control);
+    border-radius: 0.25rem;
+    background-color: var(--color-surface);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 0.875rem;
+    transition: background-color 0.15s, border-color 0.15s;
+  }
+  .ui-checkbox:hover:not(:disabled) {
+    border-color: var(--color-brand-600);
+  }
+  .ui-checkbox:checked {
+    border-color: var(--color-brand-600);
+    background-color: var(--color-brand-600);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+  }
+  .ui-checkbox:indeterminate {
+    border-color: var(--color-brand-600);
+    background-color: var(--color-brand-600);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M5 12h14'/%3E%3C/svg%3E");
+  }
+  .ui-checkbox:disabled {
+    cursor: not-allowed;
+    border-color: var(--color-ink-faint);
+    background-color: var(--color-sunken);
+  }
+  .ui-checkbox:disabled:checked {
+    background-color: var(--color-ink-faint);
+  }
+}
+
+@layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Org chart connectors: each <li> draws the elbow above it, each nested <ul> draws the stem below its parent. */
+.org-tree,
+.org-tree ul {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.org-tree ul {
+  padding-top: 24px;
+}
+.org-tree ul::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 24px;
+  border-left: 2px solid #cbd5e1;
+}
+.org-tree li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 8px 0;
+}
+.org-tree > li {
+  padding-top: 0;
+}
+.org-tree li::before,
+.org-tree li::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 50%;
+  width: 50%;
+  height: 24px;
+  border-top: 2px solid #cbd5e1;
+}
+.org-tree li::after {
+  right: auto;
+  left: 50%;
+  border-left: 2px solid #cbd5e1;
+}
+.org-tree > li::before,
+.org-tree > li::after,
+.org-tree li:only-child::before,
+.org-tree li:only-child::after {
+  display: none;
+}
+.org-tree li:only-child {
+  padding-top: 0;
+}
+.org-tree li:first-child::before,
+.org-tree li:last-child::after {
+  border: 0 none;
+}
+.org-tree li:last-child::before {
+  border-right: 2px solid #cbd5e1;
+  border-radius: 0 8px 0 0;
+}
+.org-tree li:first-child::after {
+  border-radius: 8px 0 0 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
