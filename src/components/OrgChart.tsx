@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { engagementLabel, flattenOrg, unregisteredEntities, type OrgEngagement, type OrgNode, type OrgRelation, type OrgSource } from '../data/organization';
-import { Badge, Button, Callout, Card, CardBody, CardHeader, DetailGrid, Eyebrow, Grid, ProgressBar, cx, type Tone } from './ui';
+import { engagementLabel, flattenOrg, type OrgEngagement, type OrgNode, type OrgRelation, type OrgSource } from '../data/organization';
+import { Badge, Button, Card, CardBody, CardHeader, DetailGrid, Eyebrow, Grid, ProgressBar, cx, type Tone } from './ui';
 
 const relationTone: Record<OrgRelation, Tone> = { 'Ultimate parent': 'neutral', Subsidiary: 'info', Affiliate: 'warning', 'Plant / branch': 'neutral' };
 const engagementTone: Record<OrgEngagement, Tone> = { Contracting: 'brand', Supplying: 'info', Invoicing: 'success' };
@@ -21,7 +21,7 @@ function NodeCard({ node, selected, onSelect }: { node: OrgNode; selected: boole
     >
       <div className="flex items-center justify-between gap-2">
         <Badge tone={relationTone[node.relation]} small>{node.relation}</Badge>
-        {node.ownership !== undefined && <span className="text-micro tabular-nums text-ink-muted">{node.ownership}% owned</span>}
+        {node.ownership !== undefined && <span className="text-micro tabular-nums text-ink-muted">{`${node.ownership}% owned`}</span>}
       </div>
       <div className="mt-2 text-body font-semibold text-ink">{node.name}</div>
       <div className="mt-0.5 text-caption text-ink-muted">{node.country} · {node.focus}</div>
@@ -56,7 +56,6 @@ export default function OrgChart({ root, onOpenSupplier, onStartOnboarding }: { 
   const [selectedId, setSelectedId] = useState(() => (nodes.find(node => node.current) ?? root).id);
   const selected = nodes.find(node => node.id === selectedId) ?? root;
   const verifiedCount = nodes.filter(node => node.verified).length;
-  const unregistered = unregisteredEntities(root);
   const sources = [...new Set(nodes.map(node => node.source))];
 
   return (
@@ -76,17 +75,11 @@ export default function OrgChart({ root, onOpenSupplier, onStartOnboarding }: { 
             </div>
           </div>
 
-          {unregistered.length > 0 && (
-            <Callout tone="warning" title="Entities not registered in SLM" compact actions={<Button size="xs" onClick={onStartOnboarding}>Start onboarding</Button>}>
-              {unregistered.map(node => `${node.name} (${node.focus.toLowerCase()})`).join(', ')} {unregistered.length === 1 ? 'is' : 'are'} used in supply but {unregistered.length === 1 ? 'has' : 'have'} no supplier record.
-            </Callout>
-          )}
-
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4">
             <div className="flex items-center gap-3">
               <Eyebrow>Structure confidence</Eyebrow>
               <ProgressBar value={Math.round((verifiedCount / nodes.length) * 100)} tone={verifiedCount === nodes.length ? 'success' : 'warning'} label="Verified entities" className="w-24" />
-              <span className="text-caption text-ink-muted">{verifiedCount} of {nodes.length} entities verified</span>
+              <span className="text-caption text-ink-muted">{`${verifiedCount} of ${nodes.length} entities verified`}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Eyebrow>Sources</Eyebrow>

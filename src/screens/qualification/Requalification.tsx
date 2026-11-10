@@ -30,7 +30,7 @@ export function RequalificationTab({ actor, onOpen, onContinue, onStart }: {
           { value: 'due', label: `Expiring / expired${data ? ` (${data.due.length})` : ''}` },
           { value: 'reassessment', label: `Requalification requests${data ? ` (${data.reassessment.length})` : ''}` },
         ]} />
-        {data && <span className="text-caption text-ink-muted">Reminder {data.reminderDays} days before the qualification expires</span>}
+        {data && <span className="text-caption text-ink-muted">{`Reminder ${data.reminderDays} days before the qualification expires`}</span>}
       </Toolbar>
       <Card className="overflow-hidden">
         <TableContainer>

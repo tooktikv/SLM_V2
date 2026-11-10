@@ -6,6 +6,7 @@ import { criteriaFormOptions, listCriteriaRows } from '../../qsl/services/querie
 import { useQslQuery } from '../../qsl/useQsl';
 import { Badge, Button, Callout, Card, Checkbox, EmptyState, Field, HeadRow, Input, Modal, SegmentedControl, Select, Table, TableContainer, Td, Textarea, Toolbar, Tr } from '../../components/ui';
 import { NoticeBox, attempt, type Notice } from '../qualification/shared';
+import { cycle } from '../../lib/demo';
 
 type Row = ReturnType<typeof listCriteriaRows>[number];
 const answerTypes: { value: AnswerType; label: string }[] = [
@@ -24,6 +25,21 @@ function CriteriaModal({ actor, kind, row, onClose }: { actor: Actor; kind: Crit
   const [section, setSection] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
   const set = (patch: Partial<CriteriaData>) => setData(current => ({ ...current, ...patch }));
+  const [fills, setFills] = useState(0);
+  const fillSample = () => {
+    const samples = [
+      { name: 'Environmental management system', description: 'Describe how environmental impacts are monitored and reduced', answerType: 'ShortText' as AnswerType, evidenceRequired: true },
+      { name: 'Certified quality standard', description: 'Which quality standard the site is certified to', answerType: 'Choice' as AnswerType, evidenceRequired: true },
+      { name: 'On-time delivery rate', description: 'Share of orders delivered on time in the last 12 months', answerType: 'Number' as AnswerType, evidenceRequired: false },
+    ];
+    const sample = cycle(samples, fills);
+    const code = `${kind === 'Standard' ? 'ST' : 'BC'}-${String(10 + fills).padStart(2, '0')}${Date.now().toString().slice(-3)}`;
+    setData(current => ({ ...current, code, name: sample.name, description: sample.description, answerType: sample.answerType, unit: sample.answerType === 'Number' ? '%' : undefined, evidenceRequired: sample.evidenceRequired, levels: [`${sample.name}: basic control in place`, `${sample.name}: controlled and documented`, `${sample.name}: advanced, audited and continuously improved`] }));
+    setChoices(sample.answerType === 'Choice' ? 'ISO 9001, IATF 16949, None' : '');
+    if (kind === 'BuyerCustom' && options.forms.length) setFormId(options.forms[0].id);
+    setNotice(null);
+    setFills(fills + 1);
+  };
 
   const save = () => {
     const payload: CriteriaData = { ...data, options: data.answerType === 'Choice' ? choices.split(',').map(item => item.trim()).filter(Boolean) : undefined };
@@ -37,7 +53,7 @@ function CriteriaModal({ actor, kind, row, onClose }: { actor: Actor; kind: Crit
   const form = options.forms.find(item => item.id === formId);
 
   return (
-    <Modal title={row ? `Edit criteria ${row.code}` : kind === 'Standard' ? 'Add Standard Criteria' : 'Add Buyer Custom Criteria'} eyebrow={kind === 'Standard' ? 'Central Authority' : 'Buyer-owned'} onClose={onClose} closeLabel="Close">
+    <Modal title={row ? `Edit criteria ${row.code}` : kind === 'Standard' ? 'Add Standard Criteria' : 'Add Buyer Custom Criteria'} eyebrow={kind === 'Standard' ? 'Central Authority' : 'Buyer-owned'} onClose={onClose} onFillSample={row ? undefined : fillSample} closeLabel="Close">
       <div className="space-y-4">
         <NoticeBox notice={notice} />
         {row && <Callout tone="info" compact>Saving creates a new version. Rounds that already used the earlier version are not affected.</Callout>}

@@ -1,7 +1,7 @@
 import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  IntegrationError, dispatch, getExternalSupplierId, getIntegrationSummary, getSupplierLink, guardMasterWrite, listTransactions, receive, registerInboundHandler, resetIntegration,
+  IntegrationError, dispatch, getExternalSupplierId, getIntegrationSummary, getSupplierLink, listTransactions, receive, registerInboundHandler, resetIntegration,
   resolveSupplierId, retryTransaction, testConnection, updateRetryConfig, updateSystem,
 } from './index.ts';
 
@@ -15,8 +15,6 @@ describe('External Supplier ID reference', () => {
     assert.match(external, /^EXT-/);
     assert.equal(resolveSupplierId(external), 'SUP-0012');
     assert.equal(getSupplierLink('SUP-0012')?.syncStatus, 'Synced');
-    rejects('MASTER_OWNED', () => guardMasterWrite('taxId'));
-    assert.doesNotThrow(() => guardMasterWrite('taskAssignment'));
   });
 });
 

@@ -1,8 +1,8 @@
 // QSL domain model. Supplier, document and organisation data stay in src/data and are referenced by id.
 
-export type Role = 'Supplier' | 'Coordinator' | 'Assessor' | 'Verifier' | 'Approver' | 'Buyer' | 'Admin';
+export type Role = 'Supplier' | 'Coordinator' | 'Assessor' | 'Approver' | 'Buyer' | 'Admin';
 export type Actor = { id: string; name: string; role: Role; supplierIds?: string[] };
-export type QslUser = { id: string; name: string; role: 'Coordinator' | 'Assessor' | 'Verifier' | 'Approver' };
+export type QslUser = { id: string; name: string; role: 'Coordinator' | 'Assessor' | 'Approver' };
 
 type VersionStatus = 'Draft' | 'Published' | 'Superseded';
 export type EntityVersion<T> = { version: number; status: VersionStatus; data: T; createdAt: string; createdBy: string; publishedAt?: string; publishedBy?: string };
@@ -44,7 +44,7 @@ export type SettingsChange = { at: string; by: string; summary: string };
 
 // Process (workflow) status. The qualification outcome is tracked separately in result / enrollment.
 export type ProcessStatus =
-  | 'Draft' | 'WaitingSupplier' | 'PreQualReview' | 'SampleEvaluation' | 'WaitingAssessment' | 'InfoRequested' | 'WaitingVerification' | 'WaitingApproval' | 'Completed';
+  | 'Draft' | 'WaitingSupplier' | 'PreQualReview' | 'SampleEvaluation' | 'WaitingAssessment' | 'InfoRequested' | 'WaitingApproval' | 'Completed';
 export type QslResult = 'None' | 'Pass' | 'Fail';
 export type Verdict = 'Compliant' | 'NonCompliant' | 'NeedsFix';
 export type AnswerValue = string | number;
@@ -56,11 +56,9 @@ type Correction = { criteriaId: string; message: string; requestedAt: string; re
 export type Evaluation = { criteriaId: string; verdict: Verdict; comment: string; requestCorrection: boolean; messageToSupplier: string; evaluatedBy: string; evaluatedAt: string };
 type SubmissionRound = { round: number; submittedAt: string; submittedBy: string; answers: Answer[]; evidenceIds: string[]; note: string };
 
-// Skill ratings are stored in three separate places: supplier self-rating, assessor proposal, central verification.
+// Skill ratings are stored in two separate places: the supplier's self-rating and the assessor's rating, which is the final one.
 export type SkillRating = { skillId: string; level: Level; comment?: string };
 export type CertifiedSkillView = { skillId: string; name: string; level: Level };
-export type RatingDecision = { skillId: string; selfRating?: Level; proposedRating?: Level; verifiedLevel: Level; action: 'Confirmed' | 'Adjusted'; comment?: string };
-export type Verification = { id: string; round: number; verifierId: string; verifierName: string; at: string; decisions: RatingDecision[]; comments: string };
 
 type PreReview = { infoChecked: boolean; documentsChecked: boolean; decision: 'Proceed' | 'RequestInfo' | 'Reject'; comment: string; by: string; byName: string; at: string };
 type SampleEvaluationRecord = { reference: string; result: 'Pass' | 'Fail'; comment: string; by: string; byName: string; at: string };
@@ -68,6 +66,20 @@ type InfoRequest = { message: string; from: 'PreQualReview'; requestedAt: string
 
 type ApprovalEntry = { id: string; decision: 'Approve' | 'Reject' | 'Return'; reason: string; by: string; byName: string; at: string };
 type Decision = { result: 'Pass' | 'Fail'; reason: string; effectiveDate: string; expiryDate?: string; by: string; byName: string; at: string };
+
+// Supplier Portal exchange: what SLM asks for (request) and what the supplier sends back (rate card). Field names follow the SLM-Portal field spec.
+export type RateBasis = 'Hourly' | 'Daily' | 'Monthly';
+export type PortalRole = 'Supplier Admin' | 'Supplier User' | 'Supplier Viewer';
+export type RequiredEvidence = { id: string; title: string; description: string; docTypes: string[]; mandatory: boolean };
+export type PortalRequest = { requestId: string; buyer: string; instructions: string; currencies: string[]; rateBases: RateBasis[]; requiredEvidence: RequiredEvidence[] };
+export type CommercialTerms = { currency: string; rateBasis: RateBasis; effectiveFrom: string; validUntil: string; leadTimeDays?: number; paymentTermsDays?: number; escalationPct?: number; overtimeWeekday?: number; overtimeHoliday?: number; notes: string };
+export type RateLine = { level: Level; headcount: number; avgYears: number; rate: number };
+export type SkillOffer = { criteriaId: string; offered: boolean; selfRating?: Level; comment: string; lines: RateLine[] };
+export type EvidenceLink = { id: string; targetId: string; docId: string; docName: string; docType: string; version: number; issue?: string; expiry?: string; fileNames: string[]; note: string };
+export type RateCardSubmission = {
+  ref: string; version: number; kind: 'Initial' | 'Revision'; revisesVersion?: number; infoRequestId?: string; submittedAt: string; submittedBy: string; role: PortalRole;
+  terms: CommercialTerms; skills: SkillOffer[]; evidence: EvidenceLink[]; replies: Record<string, string>; declaration: boolean;
+};
 
 // Naming note: `Qsl` is one qualification round (assessment record); the Qualified Supplier List entry is its `enrollment` (published listing).
 export type ScopeType = 'Site / plant' | 'Product line' | 'Service delivery' | 'Company-wide';
@@ -114,6 +126,8 @@ export type Qsl = {
   snapshotId?: string;
   answers: Answer[];
   evidence: Evidence[];
+  portal: PortalRequest;
+  rateCards: RateCardSubmission[];
   corrections: Correction[];
   infoRequest?: InfoRequest;
   infoReturnTo?: ProcessStatus;
@@ -122,8 +136,7 @@ export type Qsl = {
   sample?: SampleEvaluationRecord;
   evaluations: Evaluation[];
   selfRatings: SkillRating[];
-  proposedRatings: SkillRating[];
-  verifications: Verification[];
+  assessedRatings: SkillRating[];
   recommended?: 'Pass' | 'Fail';
   evaluationSummary: string;
   internalNote: string;

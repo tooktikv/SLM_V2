@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import ExportButton from '../../components/ExportButton';
 import { suppliers, type Supplier } from '../../data/suppliers';
-import { Badge, Button, Card, EmptyState, Field, HeadRow, KpiCard, KpiGrid, Modal, SearchInput, Select, Table, TableContainer, Tabs, Td, Toolbar, Tr, type Tone } from '../../components/ui';
-import { getSourcing, getSourcingSummary, listActivity, listSourcing, sourcingStages, sourcingTeam, type SourcingAction, type SourcingStage } from '../../sourcing';
+import { Badge, Button, Card, EmptyState, HeadRow, KpiCard, KpiGrid, SearchInput, Select, Table, TableContainer, Tabs, Td, Toolbar, Tr, type Tone } from '../../components/ui';
+import { getSourcingSummary, listActivity, listSourcing, sourcingStages, sourcingTeam, type SourcingAction, type SourcingStage } from '../../sourcing';
 import { useSourcingRevision } from '../../sourcing/useSourcing';
 import SourcingModal from './SourcingModal';
 import { StageBadge, activityLabel, formatDay, formatStamp } from './shared';
@@ -23,7 +23,6 @@ export default function SourcingDashboard() {
   const [activityAction, setActivityAction] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [managing, setManaging] = useState<Supplier | null>(null);
-  const [picking, setPicking] = useState(false);
 
   const summary = getSourcingSummary();
   const categories = [...new Set(suppliers.map(item => item.category))].sort();
@@ -52,10 +51,8 @@ export default function SourcingDashboard() {
         </div>
         <div className="border-b border-line-subtle p-4">
           <Toolbar title="Sourcing suppliers" description={`${rows.length} of ${summary.total} suppliers`}
-            actions={<>
-              <ExportButton filename="slm-sourcing-suppliers" columns={['Supplier ID', 'Supplier', 'Category', 'Risk', 'Sourcing stage', 'Responsible', 'Marked by', 'Marked on', 'Last update']} rows={rows.map(({ record, supplier }) => [supplier.id, supplier.name, supplier.category, supplier.risk, record.stage, record.assignee, record.interestedBy, formatDay(record.interestedAt), formatDay(record.updatedAt)])} />
-              <Button variant="primary" size="md" onClick={() => setPicking(true)}>+ Mark supplier as interested</Button>
-            </>}>
+            actions={
+              <ExportButton filename="slm-sourcing-suppliers" columns={['Supplier ID', 'Supplier', 'Category', 'Risk', 'Sourcing stage', 'Responsible', 'Marked by', 'Marked on', 'Last update']} rows={rows.map(({ record, supplier }) => [supplier.id, supplier.name, supplier.category, supplier.risk, record.stage, record.assignee, record.interestedBy, formatDay(record.interestedAt), formatDay(record.updatedAt)])} />}>
             <SearchInput placeholder="Search supplier, ID or person" value={search} onChange={event => setSearch(event.target.value)} />
             <Select aria-label="Responsible person" value={assignee} onChange={event => setAssignee(event.target.value)}><option value="">All responsible people</option>{sourcingTeam.map(name => <option key={name}>{name}</option>)}</Select>
             <Select aria-label="Category" value={category} onChange={event => setCategory(event.target.value)}><option value="">All categories</option>{categories.map(name => <option key={name}>{name}</option>)}</Select>
@@ -63,7 +60,7 @@ export default function SourcingDashboard() {
         </div>
         <TableContainer>
           <Table minWidth={1100}>
-            <HeadRow columns={['Supplier', 'Category', 'Risk level', 'Sourcing stage', 'Responsible', 'Marked interested', 'Last update', 'Action']} />
+            <HeadRow columns={['Supplier', 'Category', 'Risk level', 'Sourcing stage', 'Responsible', 'Added to sourcing', 'Last update', 'Action']} />
             <tbody>{rows.map(({ record, supplier }) => (
               <Tr key={supplier.id} onClick={() => setManaging(supplier)}>
                 <Td><div className="font-medium text-ink">{supplier.name}</div><div className="font-mono text-caption text-ink-muted">{supplier.id}</div></Td>
@@ -78,7 +75,7 @@ export default function SourcingDashboard() {
             ))}</tbody>
           </Table>
         </TableContainer>
-        {rows.length === 0 && <EmptyState title="No suppliers in this view" description="Mark a supplier as interested to start tracking it here." />}
+        {rows.length === 0 && <EmptyState title="No suppliers in this view" description="Add a supplier from the directory to start tracking it here." />}
       </Card>
 
       <Card className="overflow-hidden">
@@ -114,24 +111,7 @@ export default function SourcingDashboard() {
         )}
       </Card>
 
-      {picking && <Picker onClose={() => setPicking(false)} onPick={supplier => { setPicking(false); setManaging(supplier); }} />}
       {managing && <SourcingModal supplier={managing} onClose={() => setManaging(null)} />}
     </div>
-  );
-}
-
-function Picker({ onPick, onClose }: { onPick: (supplier: Supplier) => void; onClose: () => void }) {
-  const available = suppliers.filter(item => !getSourcing(item.id));
-  const [id, setId] = useState(available[0]?.id ?? '');
-  return (
-    <Modal title="Mark supplier as interested" eyebrow="Sourcing" onClose={onClose}>
-      {available.length === 0 ? <EmptyState title="Every supplier is already in sourcing" /> : (
-        <Field label="Supplier"><Select value={id} onChange={event => setId(event.target.value)}>{available.map(item => <option key={item.id} value={item.id}>{item.name} ({item.id})</option>)}</Select></Field>
-      )}
-      <div className="flex justify-end gap-2">
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" disabled={!id} onClick={() => { const supplier = supplierOf(id); if (supplier) onPick(supplier); }}>Continue</Button>
-      </div>
-    </Modal>
   );
 }

@@ -240,15 +240,3 @@ export function closeSample(actor: SampleActor, id: string): SampleRequest {
   notify();
   return sample;
 }
-
-// ---------------------------------------------------------------- Queries
-
-export function getSampleSummary() {
-  const all = Object.values(sampleRequests).flat();
-  const count = (...states: SharedSampleStatus[]) => all.filter(item => states.includes(sharedSampleStatus(item))).length;
-  return {
-    total: all.length, draft: count('Draft'), withSupplier: count('Requested', 'Supplier Responding'), submitted: count('Submitted'), underEvaluation: count('Under Evaluation'),
-    accepted: all.filter(item => item.status === 'Approved' || item.status === 'Conditional').length, failed: all.filter(item => item.status === 'Rejected').length,
-    portalFailures: all.filter(item => item.portal?.sync === 'Failed').length,
-  };
-}

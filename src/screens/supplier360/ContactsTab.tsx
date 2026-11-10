@@ -1,7 +1,7 @@
 import type { Supplier } from '../../data/suppliers';
-import { contactTone, coverageGaps, supplierProfiles } from '../../data/contacts';
+import { contactTone, supplierProfiles } from '../../data/contacts';
 import { useNavigation } from '../../NavigationContext';
-import { Avatar, Badge, Button, Callout, Card, CardBody, CardHeader, CellStack, DetailGrid, EmptyState, HeadRow, KpiCard, KpiGrid, Table, TableContainer, Td, Tr } from '../../components/ui';
+import { Avatar, Badge, Button, Card, CardBody, CardHeader, CellStack, DetailGrid, EmptyState, HeadRow, KpiCard, KpiGrid, Table, TableContainer, Td, Tr } from '../../components/ui';
 
 // Supplier stakeholders from Contacts & Relationship, shown inside the supplier profile.
 export default function ContactsTab({ supplier }: { supplier: Supplier }) {
@@ -18,15 +18,13 @@ export default function ContactsTab({ supplier }: { supplier: Supplier }) {
   }
 
   const { contacts } = profile;
-  const gaps = coverageGaps(contacts);
   const primary = contacts.find(contact => contact.type === 'Primary');
 
   return (
     <div className="space-y-5">
-      <KpiGrid cols={4}>
+      <KpiGrid cols={3}>
         <KpiCard label="Contacts" value={contacts.length} note="Supplier stakeholders" tone="brand" size="md" />
         <KpiCard label="Primary contact" value={primary?.name ?? '—'} note={primary?.title ?? 'Not set'} size="md" />
-        <KpiCard label="Coverage" value={gaps.length ? `${gaps.length} gap${gaps.length > 1 ? 's' : ''}` : 'Complete'} note={gaps.length ? `Missing ${gaps.join(', ').toLowerCase()}` : 'Executive sponsor and finance recorded'} tone={gaps.length ? 'warning' : 'success'} size="md" />
         <KpiCard label="Payment terms" value={profile.paymentTerms} note={`Lead time ${profile.leadTime}`} size="md" />
       </KpiGrid>
 
@@ -55,7 +53,6 @@ export default function ContactsTab({ supplier }: { supplier: Supplier }) {
             </tbody>
           </Table>
         </TableContainer>
-        {gaps.length > 0 && <div className="border-t border-line-subtle p-4"><Callout tone="warning" title="Coverage gap" compact>No {gaps.join(' or ').toLowerCase()} contact is recorded.</Callout></div>}
       </Card>
 
       <Card>

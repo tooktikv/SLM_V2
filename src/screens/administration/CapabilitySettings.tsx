@@ -20,7 +20,7 @@ export default function CapabilitySettings() {
     <div className="grid max-w-5xl grid-cols-1 gap-4 xl:grid-cols-2">
       <div className="space-y-4">
         <Card>
-          <CardHeader title="Skill rating scale" description="Levels used for supplier self, assessor proposed and Central Authority verified ratings" />
+          <CardHeader title="Skill rating scale" description="Levels used for the supplier self-rating and the assessor rating" />
           <CardBody className="space-y-4">
             <NoticeBox notice={rules.notice} />
             {qsl.ratingScale.map((item, index) => (
@@ -37,7 +37,7 @@ export default function CapabilitySettings() {
           <CardHeader title="Skill rating rules" />
           <CardBody className="space-y-4">
             <NoticeBox notice={process.notice} />
-            <label className="flex items-center gap-2 text-body text-ink-soft"><Checkbox checked={useSkillLevel} onChange={event => setUseSkillLevel(event.target.checked)} />Use skill rating levels (Central Authority verification required)</label>
+            <label className="flex items-center gap-2 text-body text-ink-soft"><Checkbox checked={useSkillLevel} onChange={event => setUseSkillLevel(event.target.checked)} />Use skill rating levels (rated by the assessor)</label>
             <div className="border-t border-line-subtle pt-4"><Button variant="primary" onClick={() => process.run(() => { updateSettings(staff.admin, { useSkillLevel }); }, 'Skill rating rules saved')}>Save rules</Button></div>
           </CardBody>
         </Card>

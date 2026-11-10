@@ -7,14 +7,13 @@ import { Badge, Button, Card, Checkbox, EmptyState, HeadRow, SearchInput, Segmen
 import { ResultBadge, formatDate, statusTone } from './shared';
 
 const actionLabel: Record<Exclude<NextAction, null>, string> = {
-  fill: 'Fill in form', prereview: 'Review', sample: 'Evaluate sample', assess: 'Assess', verify: 'Verify ratings', approve: 'Decide', edit: 'Edit draft',
+  prereview: 'Review', sample: 'Evaluate sample', assess: 'Assess', approve: 'Decide', edit: 'Edit draft',
 };
 
-const stageItems: { value: ManagementView; label: string; count?: 'open' | 'request' | 'assessment' | 'verification' | 'approval' }[] = [
+const stageItems: { value: ManagementView; label: string; count?: 'open' | 'request' | 'assessment' | 'approval' }[] = [
   { value: 'open', label: 'All', count: 'open' },
   { value: 'request', label: 'Request', count: 'request' },
   { value: 'assessment', label: 'Assessment', count: 'assessment' },
-  { value: 'verification', label: 'Verification', count: 'verification' },
   { value: 'approval', label: 'Approval', count: 'approval' },
 ];
 

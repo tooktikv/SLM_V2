@@ -17,10 +17,9 @@ export function checkEligibility(qsl: Qsl): Eligibility {
   const qualification = isApproved(qsl);
   if (!qualification) reasons.push(qsl.result === 'Fail' ? 'Qualification was rejected' : 'Qualification is not approved yet');
   const snapshot = store.snapshots.find(item => item.id === qsl.snapshotId);
-  const verification = qsl.verifications[qsl.verifications.length - 1];
   const needsRatings = !!snapshot?.useSkillLevel && snapshot.skills.length > 0;
-  const capability = qualification && (!needsRatings || (!!verification && snapshot!.skills.every(skill => verification.decisions.some(item => item.skillId === skill.id))));
-  if (qualification && !capability) reasons.push('Capability (skill rating) is not verified and approved');
+  const capability = qualification && (!needsRatings || snapshot!.skills.every(skill => qsl.assessedRatings.some(item => item.skillId === skill.id)));
+  if (qualification && !capability) reasons.push('Capability (skill rating) is not assessed and approved');
   const expiry = qsl.decision?.expiryDate;
   const validity = qualification && (!expiry || expiry >= todayIso());
   if (qualification && !validity) reasons.push('Qualification has expired; requalification is required');

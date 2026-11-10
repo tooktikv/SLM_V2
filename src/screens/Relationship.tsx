@@ -7,7 +7,7 @@ import { contactTone, coverageGaps, supplierProfiles } from '../data/contacts';
 import { flattenOrg, orgStructures } from '../data/organization';
 import { suppliers } from '../data/suppliers';
 import { useNavigation } from '../NavigationContext';
-import { Avatar, BackLink, Badge, Button, Callout, Card, CardBody, CardHeader, CellStack, EmptyState, Eyebrow, Grid, HeadRow, KpiCard, KpiGrid, Page, PageContent, ProgressBar, SearchInput, Select, Table, TableContainer, Td, Toolbar, Tr, cx, toneText, type Tone } from '../components/ui';
+import { Avatar, BackLink, Badge, Button, Card, CardBody, CardHeader, CellStack, EmptyState, Eyebrow, HeadRow, KpiCard, KpiGrid, Page, PageContent, ProgressBar, SearchInput, Select, Table, TableContainer, Td, Toolbar, Tr, cx, toneText, type Tone } from '../components/ui';
 
 type RelationshipCompany = {
   name: string;
@@ -58,31 +58,14 @@ export default function Relationship() {
   if (selected) {
     const profile = supplierProfiles[selected.id];
     const contacts = profile.contacts;
-    const gaps = coverageGaps(contacts);
-    const actions = [
-      { item: 'Deliver improvement plan for delivery performance', owner: selected.primaryContact, due: 'Oct 1', status: 'Overdue' },
-      { item: 'Provide alternate logistics partner shortlist', owner: selected.owner, due: 'Oct 15', status: 'Open' },
-      { item: 'Schedule next executive business review', owner: selected.owner, due: selected.nextReview, status: 'Open' },
-    ];
     const masterSupplier = suppliers.find(supplier => supplier.id === selected.id);
     const relatedSuppliers = suppliers.filter(supplier => supplier.category === selected.category && supplier.id !== selected.id);
-    const summary: { label: string; value: string; note: string; tone: Tone }[] = [
-      { label: 'Relationship health', value: `${selected.health}/100`, note: selected.health >= 80 ? 'Healthy' : selected.health >= 60 ? 'Needs attention' : 'At risk', tone: healthTone(selected.health) },
-      { label: 'Annual spend', value: selected.spend, note: 'Current fiscal year', tone: 'brand' },
-      { label: 'Open commitments', value: `${selected.openActions}`, note: `${selected.overdue} overdue`, tone: selected.overdue ? 'danger' : 'neutral' },
-      { label: 'Contract renewal', value: selected.renewal, note: 'Commercial milestone', tone: 'neutral' },
-      { label: 'Next review', value: selected.nextReview, note: 'Supplier business review', tone: selected.nextReview === 'Overdue' ? 'danger' : 'neutral' },
-    ];
 
     return (
       <Page>
         <Header breadcrumb={['Supplier Contacts & Relationship', 'Companies', selected.id]} title={selected.name} action={{ label: 'Open Supplier Profile', onClick: () => openSupplierProfile(selected.id) }} />
         <PageContent>
           <BackLink onClick={() => setSelected(null)}>Back to relationship portfolio</BackLink>
-
-          <KpiGrid cols={5}>
-            {summary.map(card => <KpiCard key={card.label} label={card.label} value={card.value} note={card.note} tone={card.tone} size="md" />)}
-          </KpiGrid>
 
           <OrgChart key={selected.id} root={orgStructures[selected.id]} onOpenSupplier={openSupplierProfile} onStartOnboarding={() => navigate('onboarding')} />
 
@@ -111,67 +94,19 @@ export default function Relationship() {
                 </tbody>
               </Table>
             </TableContainer>
-            {gaps.length > 0 && <div className="border-t border-line-subtle p-4"><Callout tone="warning" title="Coverage gap" compact>No {gaps.join(' or ').toLowerCase()} contact is recorded.</Callout></div>}
           </Card>
 
-          <Grid cols="split3">
-            <Card className="xl:col-span-2">
-              <CardHeader title="Commitments & actions" description="Follow-ups from meetings and reviews" actions={<Button variant="link">+ Add action</Button>} />
-              <CardBody className="space-y-2">
-                {actions.map(action => (
-                  <div key={action.item} className={cx('flex flex-wrap items-center justify-between gap-3 rounded-control border p-3', action.status === 'Overdue' ? 'border-danger-200 bg-danger-50' : 'border-line')}>
-                    <div className="min-w-0">
-                      <div className="text-body font-medium text-ink">{action.item}</div>
-                      <div className="mt-0.5 text-caption text-ink-muted">{action.owner}</div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className={cx('whitespace-nowrap text-caption', action.status === 'Overdue' ? 'font-semibold text-danger-700' : 'text-ink-muted')}>Due {action.due}</span>
-                      <Badge tone={action.status === 'Overdue' ? 'danger' : 'info'} small>{action.status}</Badge>
-                    </div>
-                  </div>
-                ))}
-              </CardBody>
-            </Card>
-
-            <Card>
-              <CardHeader title="Procurement context" />
-              <CardBody className="space-y-3">
-                {[
-                  ['Supplier tier', selected.tier],
-                  ['Internal owner', selected.owner],
-                  ['Commercial position', 'Incumbent · leverage moderate'],
-                  ['Dependency', 'Single source for 2 critical items'],
-                  ['Last price review', 'Jun 12, 2024 · +3.2% agreed'],
-                  ['Negotiation window', 'Starts Dec 1, 2024'],
-                ].map(item => <div key={item[0]} className="flex justify-between gap-4 border-b border-line-subtle pb-2 last:border-0 last:pb-0"><span className="text-caption text-ink-muted">{item[0]}</span><span className="text-right text-caption font-medium text-ink">{item[1]}</span></div>)}
-              </CardBody>
-            </Card>
-          </Grid>
-
-          <Grid cols="split3">
-            <Card className="xl:col-span-2">
-              <CardHeader title="Engagement history" description="Meetings, decisions and relationship outcomes" actions={<Button variant="link" onClick={() => navigate('performance')}>Schedule review</Button>} />
-              <CardBody>
-                {[
-                  ['Sep 10, 2024', 'Q3 Performance Review', 'Delivery targets missed; improvement plan agreed', 'S. Chen, ' + selected.primaryContact],
-                  ['Jun 12, 2024', 'Supply Chain Risk Workshop', 'Alternate capacity and continuity plan reviewed', 'J. Kim, Operations'],
-                  ['Mar 5, 2024', 'Annual Business Review', 'Contract renewed and three improvement KPIs set', 'VP Procurement, ' + selected.primaryContact],
-                ].map(item => <div key={item[0]} className="grid grid-cols-1 gap-1 border-b border-line-subtle py-3 first:pt-0 last:border-0 last:pb-0 md:grid-cols-5 md:gap-3"><div className="text-caption text-ink-muted">{item[0]}</div><div className="md:col-span-2"><div className="text-body font-medium text-ink">{item[1]}</div><div className="mt-1 text-caption text-ink-muted">{item[3]}</div></div><div className="text-body text-ink-soft md:col-span-2">{item[2]}</div></div>)}
-              </CardBody>
-            </Card>
-
-            <Card>
-              <CardHeader title="Relationship signals" />
-              <CardBody className="space-y-4">
-                {[
-                  ['Responsiveness', 86, 'Strong'],
-                  ['Executive alignment', 45, 'Coverage gap'],
-                  ['Commitment delivery', 58, 'Declining'],
-                  ['Collaboration', 78, 'Stable'],
-                ].map(signal => <div key={signal[0] as string}><div className="mb-1.5 flex justify-between"><span className="text-caption text-ink-soft">{signal[0]}</span><span className="text-caption text-ink-muted">{signal[2]}</span></div><ProgressBar value={signal[1] as number} tone={(signal[1] as number) >= 75 ? 'success' : (signal[1] as number) >= 55 ? 'warning' : 'danger'} label={signal[0] as string} /></div>)}
-              </CardBody>
-            </Card>
-          </Grid>
+          <Card>
+            <CardHeader title="Relationship signals" />
+            <CardBody className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+              {[
+                ['Responsiveness', 86, 'Strong'],
+                ['Executive alignment', 45, 'Coverage gap'],
+                ['Commitment delivery', 58, 'Declining'],
+                ['Collaboration', 78, 'Stable'],
+              ].map(signal => <div key={signal[0] as string}><div className="mb-1.5 flex justify-between"><span className="text-caption text-ink-soft">{signal[0]}</span><span className="text-caption text-ink-muted">{signal[2]}</span></div><ProgressBar value={signal[1] as number} tone={(signal[1] as number) >= 75 ? 'success' : (signal[1] as number) >= 55 ? 'warning' : 'danger'} label={signal[0] as string} /></div>)}
+            </CardBody>
+          </Card>
 
           <Card>
             <CardHeader title="Business coverage & terms" />

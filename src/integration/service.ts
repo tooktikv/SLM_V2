@@ -37,11 +37,6 @@ export const getSupplierLink = (supplierId: string): SupplierLink | undefined =>
 export const getExternalSupplierId = (supplierId: string): string | undefined => getSupplierLink(supplierId)?.externalSupplierId;
 export const resolveSupplierId = (externalSupplierId: string): string | undefined => ensureLinks().find(item => item.externalSupplierId === externalSupplierId)?.supplierId;
 
-export function guardMasterWrite(field: string): void {
-  const owned = getState().mappings.find(item => item.slmField === field && item.owner === 'External Supplier Master');
-  if (owned) fail('MASTER_OWNED', `"${field}" is owned by the External Supplier Master and cannot be overwritten by SLM`);
-}
-
 // ---------------------------------------------------------------- Transactions
 
 const nextTransactionId = () => {

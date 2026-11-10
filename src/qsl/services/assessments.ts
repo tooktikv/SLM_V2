@@ -1,4 +1,4 @@
-import type { Actor, AnswerValue, CriteriaData, Evaluation, Level, ProcessStatus, Qsl, RatingDecision, ScopeType, SkillRating, Snapshot, Verdict, Verification } from '../types.ts';
+import type { Actor, AnswerValue, CriteriaData, Evaluation, Level, PortalRequest, ProcessStatus, Qsl, ScopeType, SkillRating, Snapshot, Verdict } from '../types.ts';
 import { SCOPE_TYPES } from '../types.ts';
 import { addHistory, audit, clone, deepFreeze, getStore, nextId, now, nowIso, supplierCategory, todayIso } from '../store.ts';
 import { assertCan, assertView } from '../rbac.ts';
@@ -7,6 +7,7 @@ import { findOrFail, getVersion, publishedVersion } from '../versioning.ts';
 import { addMonthsIso, buddhistYear, isIsoDate } from '../dates.ts';
 import { validityMonthsFor } from '../settings.ts';
 import { suppliers } from '../../data/suppliers.ts';
+import { defaultPortalRequest, portalRequestId, validatePortalRequest } from './portalModel.ts';
 
 export const findSupplier = (id: string) => suppliers.find(item => item.id === id) ?? fail('NOT_FOUND', `Supplier ${id} not found`);
 export const findQsl = (id: string): Qsl => findOrFail(getStore().qsls, id, 'QSL record');
@@ -28,6 +29,7 @@ export type RequestInput = {
   approverId?: string;
   reason?: string;
   documents?: string[];
+  portal?: Partial<PortalRequest>;
 };
 
 export const isOpen = (qsl: Qsl) => qsl.status !== 'Draft' && qsl.status !== 'Completed';
@@ -52,14 +54,14 @@ function closeAsFail(actor: Actor, qsl: Qsl, reason: string, action: string): vo
 export function createDraft(actor: Actor, input: RequestInput): Qsl {
   assertCan(actor, 'qsl.create');
   const store = getStore();
-  findSupplier(input.supplierId);
+  const supplier = findSupplier(input.supplierId);
   const qsl: Qsl = {
     id: nextId('QSL'), qslNo: '', supplierId: input.supplierId, category: input.category ?? supplierCategory(input.supplierId) ?? '', formId: input.formId ?? '',
     assessmentType: input.assessmentType ?? 'First', previousQslId: input.previousQslId, round: 1, status: 'Draft', result: 'None', sampleRequired: input.sampleRequired ?? false,
     scopeType: input.scopeType ?? 'Site / plant', scopeDetail: input.scopeDetail ?? '',
     coordinatorId: input.coordinatorId ?? (actor.role === 'Coordinator' ? actor.id : store.settings.coordinatorIds[0]),
     assessorId: input.assessorId ?? '', approverId: input.approverId ?? '', dueDate: input.dueDate, reason: input.reason ?? '', documents: [...(input.documents ?? [])],
-    createdAt: nowIso(), createdBy: actor.id, answers: [], evidence: [], corrections: [], submissions: [], evaluations: [], selfRatings: [], proposedRatings: [], verifications: [],
+    createdAt: nowIso(), createdBy: actor.id, answers: [], evidence: [], portal: { ...defaultPortalRequest([actor.name, supplier.businessUnit].filter(Boolean).join(' · ')), ...input.portal }, rateCards: [], corrections: [], submissions: [], evaluations: [], selfRatings: [], assessedRatings: [],
     evaluationSummary: '', internalNote: '', approvals: [], suspensions: [], extensions: [],
   };
   qsl.qslNo = `DRAFT-${qsl.id}`;
@@ -74,8 +76,9 @@ export function updateDraft(actor: Actor, id: string, patch: Partial<RequestInpu
   const qsl = findQsl(id);
   if (qsl.status !== 'Draft') fail('INVALID_TRANSITION', 'Only drafts can be edited');
   const before = clone(qsl);
-  const { supplierId, ...rest } = patch;
+  const { supplierId, portal, ...rest } = patch;
   if (supplierId) { findSupplier(supplierId); qsl.supplierId = supplierId; }
+  if (portal) qsl.portal = { ...qsl.portal, ...portal };
   Object.assign(qsl, Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined)));
   audit(actor, { action: 'QSL draft saved', recordType: 'Qsl', recordRef: qsl.id, previous: before, next: qsl });
   return clone(qsl);
@@ -109,6 +112,7 @@ export function validateForSubmit(qsl: Qsl): string[] {
   if (store.settings.separateAssessorApprover && qsl.assessorId && qsl.assessorId === qsl.approverId) errors.push('Approver must be a different person from the assessor, per settings');
   if (!store.settings.coordinatorIds.includes(qsl.coordinatorId)) errors.push('Please select a coordinator');
   if (!qsl.reason.trim()) errors.push('Please enter the reason for the assessment');
+  errors.push(...validatePortalRequest(qsl.portal));
   return errors;
 }
 
@@ -139,6 +143,7 @@ export function submitRequest(actor: Actor, id: string): Qsl {
   store.snapshots.push(snapshot);
   const previous = qsl.previousQslId ? findQsl(qsl.previousQslId) : undefined;
   qsl.qslNo = nextId(`QSL-${buddhistYear(now())}`);
+  qsl.portal.requestId = portalRequestId(qsl.qslNo);
   qsl.round = previous ? previous.round + 1 : 1;
   qsl.snapshotId = snapshot.id;
   qsl.submittedAt = nowIso();
@@ -157,6 +162,7 @@ export function prefillReassessment(actor: Actor, previousQslId: string): Reques
     supplierId: previous.supplierId, category: previous.category, formId: form?.id ?? previous.formId, assessmentType: 'Re', previousQslId: previous.id, sampleRequired: previous.sampleRequired,
     scopeType: previous.enrollment?.scopeType ?? previous.scopeType, scopeDetail: previous.enrollment?.scopeDetail ?? previous.scopeDetail, assessorId: previous.assessorId, approverId: previous.approverId,
     coordinatorId: actor.role === 'Coordinator' ? actor.id : previous.coordinatorId, reason: '',
+    portal: { ...clone(previous.portal), requestId: '' },
   };
 }
 
@@ -200,7 +206,7 @@ export function saveAnswers(actor: Actor, id: string, answers: { criteriaId: str
 
 const isLevel = (value: unknown): value is Level => value === 1 || value === 2 || value === 3;
 
-// Rating Submission (supplier side): a declared value that is never the verified rating.
+// Rating Submission (supplier side): a declared value that is never the assessed rating.
 export function saveSelfRatings(actor: Actor, id: string, ratings: SkillRating[]): Qsl {
   const { qsl, snapshot } = loadForSupplier(actor, id);
   if (!snapshot.useSkillLevel) fail('VALIDATION', 'Skill / Level is not enabled');
@@ -234,13 +240,6 @@ export function missingSupplierInput(qsl: Qsl, snapshot: Snapshot): MissingItem[
     if (criteria.data.evidenceRequired && !qsl.evidence.some(item => item.criteriaId === criteria.id)) missing.push({ criteriaId: criteria.id, name: criteria.data.name, kind: 'Evidence', message: 'Evidence not attached' });
     return missing;
   });
-}
-
-export function checkBeforeSubmit(actor: Actor, id: string): MissingItem[] {
-  assertCan(actor, 'qsl.fill');
-  const qsl = findQsl(id);
-  assertView(actor, qsl);
-  return missingSupplierInput(qsl, getSnapshot(qsl));
 }
 
 export function submitAnswers(actor: Actor, id: string, note = ''): Qsl {
@@ -335,14 +334,14 @@ export function saveEvaluations(actor: Actor, id: string, inputs: EvaluationInpu
   return clone(qsl);
 }
 
-// Rating Submission (assessor side): the buyer proposes a rating; it is not final until centrally verified.
-export function proposeRatings(actor: Actor, id: string, ratings: SkillRating[]): Qsl {
+// Rating Submission (assessor side): the assessor's rating is the final skill rating once approved.
+export function saveAssessedRatings(actor: Actor, id: string, ratings: SkillRating[]): Qsl {
   const { qsl, snapshot } = loadForAssessor(actor, id);
   if (!snapshot.useSkillLevel) fail('VALIDATION', 'Skill / Level is not enabled');
   const errors = ratings.flatMap(rating => (!snapshot.skills.some(skill => skill.id === rating.skillId) ? [`Skill ${rating.skillId} not found`] : isLevel(rating.level) ? [] : ['Level must be 1-3']));
   requireValid(errors);
-  ratings.forEach(rating => { qsl.proposedRatings = [...qsl.proposedRatings.filter(item => item.skillId !== rating.skillId), { skillId: rating.skillId, level: rating.level, comment: rating.comment }]; });
-  audit(actor, { action: 'Proposed skill rating saved', recordType: 'Qsl', recordRef: qsl.qslNo, next: qsl.proposedRatings });
+  ratings.forEach(rating => { qsl.assessedRatings = [...qsl.assessedRatings.filter(item => item.skillId !== rating.skillId), { skillId: rating.skillId, level: rating.level, comment: rating.comment }]; });
+  audit(actor, { action: 'Assessed skill rating saved', recordType: 'Qsl', recordRef: qsl.qslNo, next: qsl.assessedRatings });
   return clone(qsl);
 }
 
@@ -362,10 +361,8 @@ export function requestMoreInfo(actor: Actor, id: string): Qsl {
   return clone(qsl);
 }
 
-const latestVerification = (qsl: Qsl): Verification | undefined => qsl.verifications[qsl.verifications.length - 1];
-
-// What still blocks the step after the assessor.
-function missingForVerification(qsl: Qsl, snapshot: Snapshot): string[] {
+// What still blocks the assessment from going to approval.
+export function missingForApproval(qsl: Qsl, snapshot: Snapshot): string[] {
   const missing = missingSupplierInput(qsl, snapshot).map(item => `${item.name}: ${item.message}`);
   snapshot.criteria.forEach(criteria => {
     const evaluation = qsl.evaluations.find(item => item.criteriaId === criteria.id);
@@ -373,68 +370,30 @@ function missingForVerification(qsl: Qsl, snapshot: Snapshot): string[] {
     else if (evaluation.verdict === 'NeedsFix') missing.push(`${criteria.data.name}: Needs fix`);
     else if (evaluation.requestCorrection) missing.push(`${criteria.data.name}: Correction request pending`);
   });
-  if (snapshot.useSkillLevel) snapshot.skills.filter(skill => !qsl.proposedRatings.some(item => item.skillId === skill.id)).forEach(skill => missing.push(`Skill ${skill.name}: Assessor has not proposed a rating`));
+  if (snapshot.useSkillLevel) snapshot.skills.filter(skill => !qsl.assessedRatings.some(item => item.skillId === skill.id)).forEach(skill => missing.push(`Skill ${skill.name}: Assessor has not rated it`));
   if (qsl.corrections.some(item => !item.resolvedAt)) missing.push('Correction requests awaiting supplier response');
   if (!qsl.recommended) missing.push('Assessor has not proposed an overall result');
   return missing;
 }
 
-export function missingForApproval(qsl: Qsl, snapshot: Snapshot): string[] {
-  const missing = missingForVerification(qsl, snapshot);
-  const verification = latestVerification(qsl);
-  if (snapshot.useSkillLevel && (!verification || verification.at <= (qsl.assessedAt ?? ''))) missing.push('Central Verification not completed');
-  return missing;
-}
-
-export function submitToVerification(actor: Actor, id: string, input: { recommended: 'Pass' | 'Fail'; summary: string; internalNote?: string }): Qsl {
+// One assessment covers the criteria, the skill ratings and the recommendation, then goes straight to approval.
+export function submitAssessment(actor: Actor, id: string, input: { recommended: 'Pass' | 'Fail'; summary: string; internalNote?: string }): Qsl {
   const { qsl, snapshot } = loadForAssessor(actor, id);
   if (!input.recommended) fail('VALIDATION', 'Please select the overall recommended result');
   if (!input.summary?.trim()) fail('VALIDATION', 'Please enter the assessment summary');
   qsl.recommended = input.recommended;
-  const missing = missingForVerification(qsl, snapshot);
+  const missing = missingForApproval(qsl, snapshot);
   if (missing.length) { qsl.recommended = undefined; fail('VALIDATION', `Cannot submit result: ${missing[0]}`, missing); }
   qsl.evaluationSummary = input.summary;
   qsl.internalNote = input.internalNote ?? qsl.internalNote;
   qsl.assessedBy = actor.id;
   qsl.assessedAt = nowIso();
-  move(actor, qsl, 'WaitingVerification', 'Assessor submitted result to Central Verification', `Recommendation: ${input.recommended === 'Pass' ? 'Pass' : 'Fail'}`);
-  return clone(qsl);
-}
-
-// ---------------------------------------------------------------- Skill Rating Verification (Central)
-
-export function verifyRatings(actor: Actor, id: string, input: { decisions: { skillId: string; verifiedLevel: Level; comment?: string }[]; comments?: string }): Qsl {
-  assertCan(actor, 'rating.verify');
-  const qsl = findQsl(id);
-  assertView(actor, qsl);
-  if (qsl.status !== 'WaitingVerification') fail('INVALID_TRANSITION', 'Verification is allowed only while waiting for Central Verification');
-  const snapshot = getSnapshot(qsl);
-  const errors: string[] = [];
-  const baseline = new Map<string, { self?: Level; proposed?: Level }>();
-  qsl.selfRatings.forEach(item => baseline.set(item.skillId, { ...baseline.get(item.skillId), self: item.level }));
-  qsl.proposedRatings.forEach(item => baseline.set(item.skillId, { ...baseline.get(item.skillId), proposed: item.level }));
-  const given = input.decisions.map(item => item.skillId);
-  if (new Set(given).size !== given.length) errors.push('Each skill can be verified only once');
-  [...baseline.keys()].filter(skillId => !given.includes(skillId)).forEach(skillId => errors.push(`Rating must be verified for ${snapshot.skills.find(skill => skill.id === skillId)?.name ?? skillId}`));
-  const decisions: RatingDecision[] = input.decisions.map(item => {
-    const known = baseline.get(item.skillId);
-    if (!known) errors.push(`No rating found to verify for ${item.skillId}`);
-    if (!isLevel(item.verifiedLevel)) errors.push('Level must be 1-3');
-    const reference = known?.proposed ?? known?.self;
-    const action = item.verifiedLevel === reference ? 'Confirmed' : 'Adjusted';
-    if (action === 'Adjusted' && !item.comment?.trim()) errors.push(`A reason is required when adjusting the rating for ${snapshot.skills.find(skill => skill.id === item.skillId)?.name ?? item.skillId}`);
-    return { skillId: item.skillId, selfRating: known?.self, proposedRating: known?.proposed, verifiedLevel: item.verifiedLevel, action, comment: item.comment };
-  });
-  requireValid(errors, 'Verification is incomplete');
-  const verification: Verification = deepFreeze({ id: nextId('VER'), round: qsl.verifications.length + 1, verifierId: actor.id, verifierName: actor.name, at: nowIso(), decisions, comments: input.comments ?? '' });
-  qsl.verifications.push(verification);
-  audit(actor, { action: 'Skill rating verified', recordType: 'Verification', recordRef: verification.id, next: verification, remarks: verification.comments });
-  move(actor, qsl, 'WaitingApproval', 'Central Verification completed', `${decisions.filter(item => item.action === 'Adjusted').length} of ${decisions.length} skills adjusted`);
+  move(actor, qsl, 'WaitingApproval', 'Assessor submitted the assessment for approval', `Recommendation: ${input.recommended === 'Pass' ? 'Pass' : 'Fail'}`);
   return clone(qsl);
 }
 
 export const qualificationLevelOf = (qsl: Qsl): Level | undefined => {
-  const levels = latestVerification(qsl)?.decisions.map(item => item.verifiedLevel) ?? [];
+  const levels = qsl.assessedRatings.map(item => item.level);
   return levels.length ? (Math.min(...levels) as Level) : undefined;
 };
 

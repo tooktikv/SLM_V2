@@ -10,7 +10,7 @@ import { listDirectory } from '../../qsl/services/queries';
 import { getQslSummary, listCapabilities } from '../../qsl/services/qslRegister';
 import { useQslQuery } from '../../qsl/useQsl';
 import type { Screen } from '../../types';
-import { Button, Card, CardBody, CardHeader, ColumnChart, EmptyState, Eyebrow, FilterBar, FilterField, Grid, HeadRow, Input, KpiCard, KpiGrid, Select, Table, TableContainer, Tabs, Td, Tr, cx, toneText, type Tone } from '../../components/ui';
+import { Button, Card, CardBody, CardHeader, ColumnChart, EmptyState, Eyebrow, Grid, HeadRow, Input, KpiCard, KpiGrid, Select, Table, TableContainer, Tabs, Td, Toolbar, Tr, cx, toneText, type Tone } from '../../components/ui';
 import { audits } from '../Audit';
 import { cars } from '../CAR';
 import { BarList } from './BarList';
@@ -130,7 +130,7 @@ export default function ModuleReports() {
 
   const sections: Section[] = [
     {
-      id: 'registration', tab: 'Registration', title: 'Supplier Registration Report', description: 'Suppliers registered in SLM and their current status',
+      id: 'registration', tab: 'Registration', title: 'Supplier Registration Report', description: 'Suppliers registered in SLM, by current status and by how many joined in each period',
       kpis: [{ label: 'Registered suppliers', value: scoped.length, note: 'In the selected scope', tone: 'brand' }, { label: 'Active', value: statusCount('Active'), note: 'Qualified to supply', tone: 'success' }, { label: 'Pending', value: statusCount('Pending'), note: 'Onboarding or review', tone: 'warning' }, { label: 'Inactive', value: statusCount('Inactive'), note: 'Draft or rejected', tone: 'neutral' }],
       trend: { title: 'New registrations', base: [3, 4, 2, 5, 6, 4, 7, 5, 6, 8, 7, 9], tone: 'brand' },
       distribution: { title: 'Suppliers by status', items: displayStatuses.map(name => ({ label: name, value: statusCount(name) })) },
@@ -139,7 +139,7 @@ export default function ModuleReports() {
       drill: [{ label: 'Open supplier directory', screen: 'suppliers' }, { label: 'Open onboarding register', screen: 'onboarding' }],
     },
     {
-      id: 'qualification', tab: 'Qualification', title: 'Supplier Qualification Summary', description: 'Qualification outcome per supplier',
+      id: 'qualification', tab: 'Qualification', title: 'Supplier Qualification Summary', description: 'Which suppliers have passed qualification and which are still waiting',
       kpis: [{ label: 'Qualified', value: qualCount('Qualified'), note: 'Passed qualification', tone: 'success' }, { label: 'Pending', value: qualCount('Pending'), note: 'In assessment', tone: 'warning' }, { label: 'Expired', value: qualCount('Expired'), note: 'Requalification needed', tone: 'danger' }, { label: 'Rejected', value: qualCount('Rejected'), note: 'Did not qualify', tone: 'danger' }],
       trend: { title: 'Qualifications completed', base: [1, 2, 1, 3, 2, 4, 3, 2, 4, 3, 5, 4], tone: 'success' },
       distribution: { title: 'Suppliers by qualification status', items: ['Qualified', 'Pending', 'Expired', 'Rejected'].map(name => ({ label: name, value: qualCount(name) })) },
@@ -148,7 +148,7 @@ export default function ModuleReports() {
       drill: [{ label: 'Open qualification list', screen: 'qualification', section: 'pending' }, { label: 'Open requalification', screen: 'qualification', section: 'requalification' }],
     },
     {
-      id: 'qsl', tab: 'Qualification & QSL', title: 'Qualification & QSL Summary', description: 'Qualified supplier list standing (all suppliers; the filters above do not apply)',
+      id: 'qsl', tab: 'Qualification & QSL', title: 'Qualification & QSL Summary', description: 'Where each supplier stands on the QSL. It covers all suppliers, so the filters do not apply',
       kpis: [{ label: 'Published', value: qsl?.published ?? '—', note: 'On the QSL', tone: 'success' }, { label: 'Eligible, not published', value: qsl?.eligible ?? '—', note: 'Approved, awaiting publish', tone: 'brand' }, { label: 'Suspended', value: qsl?.suspended ?? '—', note: 'Suspended from the QSL', tone: 'warning' }, { label: 'Expired', value: qsl?.expired ?? '—', note: 'Validity ended', tone: 'danger' }],
       trend: { title: 'Listings published', base: [1, 0, 2, 1, 3, 2, 1, 2, 3, 2, 1, 2], tone: 'brand' },
       distribution: { title: 'Published suppliers by category', items: (qsl?.byCategory ?? []).map(item => ({ label: item.category, value: item.total })) },
@@ -156,8 +156,8 @@ export default function ModuleReports() {
       drill: [{ label: 'Open qualified list', screen: 'qualification', section: 'qualified' }],
     },
     {
-      id: 'capability', tab: 'Capability', title: 'Capability Approval Summary', description: 'Capability and skill rating approval status',
-      kpis: [{ label: 'Approved', value: capCount('Approved'), note: 'Capability approved', tone: 'success' }, { label: 'In assessment', value: capCount('In assessment'), note: 'Assessment running', tone: 'info' }, { label: 'Pending approval', value: capCount('Pending central verification', 'Pending buyer approval'), note: 'Central or buyer', tone: 'warning' }, { label: 'Revision requested', value: capCount('Revision requested'), note: 'Back to supplier', tone: 'danger' }],
+      id: 'capability', tab: 'Capability', title: 'Capability Approval Summary', description: 'Capabilities and skill ratings that are waiting for approval or already approved',
+      kpis: [{ label: 'Approved', value: capCount('Approved'), note: 'Capability approved', tone: 'success' }, { label: 'In assessment', value: capCount('In assessment'), note: 'Assessment running', tone: 'info' }, { label: 'Pending approval', value: capCount('Pending buyer approval'), note: 'Waiting for the buyer', tone: 'warning' }, { label: 'Revision requested', value: capCount('Revision requested'), note: 'Back to supplier', tone: 'danger' }],
       trend: { title: 'Capabilities approved', base: [0, 1, 1, 2, 1, 2, 3, 2, 3, 2, 4, 3], tone: 'success' },
       distribution: { title: 'Capabilities by status', items: countBy(capabilities, row => row.status) },
       columns: ['Supplier', 'Category', 'Scope', 'Status', 'Valid until'],
@@ -165,25 +165,25 @@ export default function ModuleReports() {
       drill: [{ label: 'Open capability list', screen: 'qualification', section: 'qualified' }],
     },
     {
-      id: 'risk', tab: 'Risk', title: 'Supplier Risk Summary', description: 'Risk level and score per supplier',
+      id: 'risk', tab: 'Risk', title: 'Supplier Risk Summary', description: 'Risk level and score of each supplier, and how many need action',
       kpis: [{ label: 'Critical', value: riskCount('Critical'), note: 'Immediate action', tone: 'danger' }, { label: 'High', value: riskCount('High Risk'), note: 'Escalated', tone: 'danger' }, { label: 'Medium', value: riskCount('Medium Risk'), note: 'Monitor', tone: 'warning' }, { label: 'Low', value: riskCount('Low Risk'), note: 'Within appetite', tone: 'success' }],
       trend: { title: 'High and critical suppliers', base: [3, 3, 4, 4, 3, 5, 4, 5, 4, 5, 6, 5], tone: 'danger' },
       distribution: { title: 'Suppliers by risk level', items: ['Critical', 'High Risk', 'Medium Risk', 'Low Risk'].map(name => ({ label: name, value: riskCount(name) })) },
       columns: ['Supplier', 'Risk level', 'Risk score', 'Owner'],
       rows: [...scoped].sort((a, b) => riskScore[b.risk] - riskScore[a.risk]).map(supplier => ({ cells: [supplier.name, supplier.risk, riskScore[supplier.risk], supplier.owner], supplierId: supplier.id, tab: 'Risk' })),
-      drill: [{ label: 'Open risk overview', screen: 'risk' }, { label: 'Open risk assessment', screen: 'risk', section: 'assessment' }],
+      drill: [{ label: 'Open risk overview', screen: 'risk' }],
     },
     {
-      id: 'compliance', tab: 'Compliance', title: 'Compliance Summary', description: 'Documents, contracts, audits and screening obligations',
+      id: 'compliance', tab: 'Compliance', title: 'Compliance Summary', description: 'Status of documents, contracts, audits and screening, and what needs follow-up',
       kpis: [{ label: 'Average compliance', value: `${average(companies.map(company => company.compliance))}%`, note: 'Across suppliers', tone: 'brand' }, { label: 'Items tracked', value: complianceItems.length, note: 'All obligation types', tone: 'neutral' }, { label: 'Need attention', value: complianceItems.filter(needsAttention).length, note: 'Expiring, expired or missing', tone: 'danger' }, { label: 'Below 70%', value: companies.filter(company => company.compliance < 70).length, note: 'Suppliers', tone: 'warning' }],
       trend: { title: 'Average compliance score', base: [74, 75, 73, 76, 77, 76, 78, 77, 79, 78, 80, 81], tone: 'brand', kind: 'score' },
       distribution: { title: 'Items by status', items: countBy(complianceItems, item => item.status) },
       columns: ['Supplier', 'Compliance %', 'Items tracked', 'Need attention', 'Last sync'],
       rows: companies.map(company => ({ cells: [company.name, company.compliance, company.items.length, company.items.filter(needsAttention).length, company.lastSync], supplierId: company.id, tab: 'Compliance' })),
-      drill: [{ label: 'Open compliance monitoring', screen: 'compliance', section: 'monitoring' }, { label: 'Open document register', screen: 'compliance', section: 'documents' }],
+      drill: [{ label: 'Open compliance overview', screen: 'compliance', section: 'overview' }, { label: 'Open document renewal', screen: 'compliance', section: 'renewal' }],
     },
     {
-      id: 'samples', tab: 'Sample Requests', title: 'Sample Request Summary', description: 'Physical sample requests and evaluation results',
+      id: 'samples', tab: 'Sample Requests', title: 'Sample Request Summary', description: 'Sample requests from the request to the test result and decision',
       kpis: [{ label: 'Total requests', value: samples.length, note: 'All time', tone: 'brand' }, { label: 'In progress', value: samples.filter(isSampleOpen).length, note: 'Requested to testing', tone: 'info' }, { label: 'Approved', value: samples.filter(sample => sample.status === 'Approved').length, note: 'Passed evaluation', tone: 'success' }, { label: 'Rejected', value: samples.filter(sample => sample.status === 'Rejected').length, note: 'Failed evaluation', tone: 'danger' }],
       trend: { title: 'Sample requests raised', base: [2, 3, 2, 4, 3, 5, 4, 3, 5, 4, 6, 4], tone: 'brand' },
       distribution: { title: 'Requests by status', items: countBy(samples, sample => sample.status) },
@@ -192,7 +192,7 @@ export default function ModuleReports() {
       drill: [{ label: 'Open sample request tracking', screen: 'onboarding', section: 'samples' }],
     },
     {
-      id: 'audit', tab: 'Audit & Assessment', title: 'Audit & Assessment Summary', description: 'Audit campaigns, grades and findings',
+      id: 'audit', tab: 'Audit & Assessment', title: 'Audit & Assessment Summary', description: 'Audit campaigns, grades and open findings',
       kpis: [{ label: 'Audits', value: auditRows.length, note: 'All campaigns', tone: 'brand' }, { label: 'In progress', value: auditRows.filter(audit => audit.status === 'In Progress').length, note: 'Fieldwork running', tone: 'info' }, { label: 'Completed', value: auditRows.filter(audit => audit.status === 'Completed').length, note: 'Report issued', tone: 'success' }, { label: 'Open findings', value: auditRows.reduce((total, audit) => total + audit.findings.filter(finding => finding.status !== 'Closed').length, 0), note: 'Not yet closed', tone: 'warning' }],
       trend: { title: 'Audits completed', base: [1, 0, 1, 2, 1, 1, 2, 1, 2, 1, 2, 1], tone: 'success' },
       distribution: { title: 'Audits by status', items: countBy(auditRows, audit => audit.status) },
@@ -201,7 +201,7 @@ export default function ModuleReports() {
       drill: [{ label: 'Open audit & assessment', screen: 'audit' }],
     },
     {
-      id: 'car', tab: 'Corrective Action', title: 'Corrective Action Summary', description: 'CAR and CAP progress per supplier',
+      id: 'car', tab: 'Corrective Action', title: 'Corrective Action Summary', description: 'Corrective actions (CAR) and supplier plans (CAP) that are open, overdue or closed',
       kpis: [{ label: 'Corrective actions', value: carRows.length, note: 'All CARs', tone: 'brand' }, { label: 'Open', value: carRows.filter(car => car.status !== 'Completed').length, note: 'Not closed', tone: 'warning' }, { label: 'Overdue', value: carRows.filter(car => car.status === 'Overdue').length, note: 'Past due date', tone: 'danger' }, { label: 'Completed', value: carRows.filter(car => car.status === 'Completed').length, note: 'Verified and closed', tone: 'success' }],
       trend: { title: 'CARs issued', base: [2, 1, 3, 2, 2, 4, 3, 2, 3, 4, 3, 2], tone: 'warning' },
       distribution: { title: 'CARs by status', items: countBy(carRows, car => car.status) },
@@ -210,7 +210,7 @@ export default function ModuleReports() {
       drill: [{ label: 'Open corrective action', screen: 'car' }],
     },
     {
-      id: 'performance', tab: 'Performance', title: 'Supplier Performance Summary', description: 'Scorecard results by supplier',
+      id: 'performance', tab: 'Performance', title: 'Supplier Performance Summary', description: 'Scorecard results by supplier, from top performers to those below target',
       kpis: [{ label: 'Average score', value: `${average(performance.map(item => item.score))}%`, note: 'Across suppliers', tone: 'brand' }, { label: 'Suppliers scored', value: performance.length, note: 'With a scorecard', tone: 'neutral' }, { label: 'Top performers', value: performance.filter(item => item.score >= 90).length, note: 'Score 90 or higher', tone: 'success' }, { label: 'Below target', value: performance.filter(item => item.score < 60).length, note: 'Score under 60', tone: 'danger' }],
       trend: { title: 'Average performance score', base: [72, 74, 71, 76, 75, 78, 77, 76, 78, 79, 78, 80], tone: 'brand', kind: 'score' },
       distribution: { title: 'Suppliers by score band', items: [{ label: 'Excellent (90+)', value: performance.filter(item => item.score >= 90).length }, { label: 'Good (75–89)', value: performance.filter(item => item.score >= 75 && item.score < 90).length }, { label: 'Fair (60–74)', value: performance.filter(item => item.score >= 60 && item.score < 75).length }, { label: 'Poor (under 60)', value: performance.filter(item => item.score < 60).length }] },
@@ -245,33 +245,30 @@ export default function ModuleReports() {
   const groupWord = grouping === 'Month' ? 'month' : grouping === 'Quarter' ? 'quarter' : 'year';
   const periodText = range ? `${monthLabel(rangeStart)} – ${monthLabel(to)}` : `${monthLabel(rangeStart)} – ${monthLabel(to)} (trend only)`;
   const open = (row: Row) => { const supplier = suppliers.find(item => item.id === row.supplierId); if (supplier) openSupplier(supplier, row.tab); };
-  const dirty = filtered || period !== 'all' || grouping !== 'Month';
-  const clearAll = () => { setPeriod('all'); setGrouping('Month'); setCategory(''); setBuyer(''); setStatus(''); };
 
   return (
     <div className="space-y-5">
-      <Card className="p-3">
-        <FilterBar onClear={dirty ? clearAll : undefined} trailing={<><ExportButton label="Export report" filename={`slm-${section.id}-report`} columns={section.columns} rows={section.rows.map(row => row.cells)} /><Button onClick={() => window.print()}>Print / PDF</Button></>}>
-          <FilterField label="Period" active={period !== 'all'} className="w-44"><Select aria-label="Period" value={period} onChange={event => setPeriod(event.target.value as Period)}>{periodOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></FilterField>
-          {period === 'custom' && (
-            <>
-              <FilterField label="From month" active><Input type="month" aria-label="From month" value={customFrom} max={customTo} onChange={event => event.target.value && setCustomFrom(event.target.value)} className="w-40" /></FilterField>
-              <FilterField label="To month" active><Input type="month" aria-label="To month" value={customTo} min={customFrom} onChange={event => event.target.value && setCustomTo(event.target.value)} className="w-40" /></FilterField>
-            </>
-          )}
-          <FilterField label="Group totals by" className="w-36"><Select aria-label="Group totals by" value={grouping} onChange={event => setGrouping(event.target.value as Grouping)}>{groupings.map(item => <option key={item}>{item}</option>)}</Select></FilterField>
-          <FilterField label="Product category" active={!!category} className="w-48"><Select aria-label="Product category" value={category} onChange={event => setCategory(event.target.value)}><option value="">All categories</option>{categories.map(item => <option key={item}>{item}</option>)}</Select></FilterField>
-          <FilterField label="Buyer / company" active={!!buyer} className="w-52"><Select aria-label="Buyer / company" value={buyer} onChange={event => setBuyer(event.target.value)}><option value="">All buyers / companies</option>{buyers.map(item => <option key={item}>{item}</option>)}</Select></FilterField>
-          <FilterField label="Supplier status" active={!!status} className="w-44"><Select aria-label="Supplier status" value={status} onChange={event => setStatus(event.target.value)}><option value="">All statuses</option>{displayStatuses.map(item => <option key={item}>{item}</option>)}</Select></FilterField>
-        </FilterBar>
-        <p className="mt-2 px-1 text-caption text-ink-muted">Filters apply to the KPI cards, charts, period highlights and supplier list of every tab. {scoped.length} of {suppliers.length} suppliers in view. {mockNote}</p>
-      </Card>
-
       <Tabs<string> label="Report modules" value={section.id} onChange={setTab} items={sections.map(item => ({ value: item.id, label: item.tab }))} />
 
       <div>
-        <h2 className="text-lg font-semibold text-ink">{section.title}</h2>
-        <p className="mt-0.5 text-caption text-ink-muted">{section.description}</p>
+        <Toolbar
+          title={section.title}
+          description={section.description}
+          actions={<><ExportButton label="Export report" filename={`slm-${section.id}-report`} columns={section.columns} rows={section.rows.map(row => row.cells)} /><Button onClick={() => window.print()}>Print / PDF</Button></>}
+          panelExtra={period === 'custom' && (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block min-w-0"><span className="mb-1.5 block text-caption font-medium text-brand-700">From month</span><Input type="month" aria-label="From month" value={customFrom} max={customTo} onChange={event => event.target.value && setCustomFrom(event.target.value)} /></label>
+              <label className="block min-w-0"><span className="mb-1.5 block text-caption font-medium text-brand-700">To month</span><Input type="month" aria-label="To month" value={customTo} min={customFrom} onChange={event => event.target.value && setCustomTo(event.target.value)} /></label>
+            </div>
+          )}
+        >
+          <Select key="period" aria-label="Period" value={period} onChange={event => setPeriod(event.target.value as Period)}>{periodOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</Select>
+          <Select key="grouping" aria-label="Group totals by" value={grouping} onChange={event => setGrouping(event.target.value as Grouping)}>{groupings.map(item => <option key={item}>{item}</option>)}</Select>
+          <Select key="category" aria-label="Product category" value={category} onChange={event => setCategory(event.target.value)}><option value="">All categories</option>{categories.map(item => <option key={item}>{item}</option>)}</Select>
+          <Select key="buyer" aria-label="Buyer / company" value={buyer} onChange={event => setBuyer(event.target.value)}><option value="">All buyers / companies</option>{buyers.map(item => <option key={item}>{item}</option>)}</Select>
+          <Select key="status" aria-label="Supplier status" value={status} onChange={event => setStatus(event.target.value)}><option value="">All statuses</option>{displayStatuses.map(item => <option key={item}>{item}</option>)}</Select>
+        </Toolbar>
+        <p className="mt-2 text-caption text-ink-muted">{`Filters apply to the KPI cards, charts, period highlights and supplier list of every tab. ${scoped.length} of ${suppliers.length} suppliers in view. ${mockNote}`}</p>
       </div>
       <KpiGrid cols={4}>{section.kpis.map(kpi => <KpiCard key={kpi.label} label={kpi.label} value={kpi.value} note={kpi.note} tone={kpi.tone} size="md" />)}</KpiGrid>
 
@@ -287,18 +284,18 @@ export default function ModuleReports() {
       </Grid>
 
       <Card>
-          <CardHeader title="Period highlights" description={`${section.trend.title} · ${periodText}`} actions={<Button onClick={() => setShowBreakdown(open => !open)}>{showBreakdown ? 'Hide' : 'Show'} {groupWord}ly breakdown</Button>} />
+          <CardHeader title="Period highlights" description={`${section.trend.title} · ${periodText}`} actions={<Button onClick={() => setShowBreakdown(open => !open)}>{`${showBreakdown ? 'Hide' : 'Show'} ${groupWord}ly breakdown`}</Button>} />
           <CardBody>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <div className="rounded-control border border-line-subtle p-3"><Eyebrow>{kind === 'count' ? 'Total in period' : 'Average in period'}</Eyebrow><div className="mt-1 text-xl font-semibold tabular-nums text-ink">{current}{unit}</div><div className="text-caption text-ink-muted">{monthSpan} month{monthSpan > 1 ? 's' : ''}</div></div>
-              <div className="rounded-control border border-line-subtle p-3"><Eyebrow>Vs previous {monthSpan} month{monthSpan > 1 ? 's' : ''}</Eyebrow><div className={cx('mt-1 text-xl font-semibold tabular-nums', toneText[deltaTone])}>{delta > 0 ? '▲' : delta < 0 ? '▼' : '–'} {deltaText}</div><div className="text-caption text-ink-muted">Was {previous}{unit}</div></div>
+              <div className="rounded-control border border-line-subtle p-3"><Eyebrow>{`Vs previous ${monthSpan} month${monthSpan > 1 ? 's' : ''}`}</Eyebrow><div className={cx('mt-1 text-xl font-semibold tabular-nums', toneText[deltaTone])}>{delta > 0 ? '▲' : delta < 0 ? '▼' : '–'} {deltaText}</div><div className="text-caption text-ink-muted">{`Was ${previous}${unit}`}</div></div>
               <div className="rounded-control border border-line-subtle p-3"><Eyebrow>Highest {groupWord}</Eyebrow><div className="mt-1 text-xl font-semibold tabular-nums text-ink">{peak.value}{unit}</div><div className="text-caption text-ink-muted">{peak.label}</div></div>
               <div className="rounded-control border border-line-subtle p-3"><Eyebrow>Lowest {groupWord}</Eyebrow><div className="mt-1 text-xl font-semibold tabular-nums text-ink">{low.value}{unit}</div><div className="text-caption text-ink-muted">{low.label}</div></div>
             </div>
           </CardBody>
           {showBreakdown && (
             <div className="border-t border-line-subtle">
-              <div className="flex items-center justify-between gap-2 px-5 py-3"><span className="text-caption font-semibold text-ink-soft">{grouping}ly breakdown</span><ExportButton label="Export breakdown" filename={`slm-${section.id}-${grouping.toLowerCase()}-summary`} columns={[grouping, section.trend.title, 'Change', 'Share']} rows={summaryRows} /></div>
+              <div className="flex items-center justify-between gap-2 px-5 py-3"><span className="text-caption font-semibold text-ink-soft">{`${grouping}ly breakdown`}</span><ExportButton label="Export breakdown" filename={`slm-${section.id}-${grouping.toLowerCase()}-summary`} columns={[grouping, section.trend.title, 'Change', 'Share']} rows={summaryRows} /></div>
               <TableContainer>
                 <Table minWidth={420}>
                   <HeadRow columns={[grouping, section.trend.title, 'Change', 'Share']} />

@@ -15,7 +15,7 @@ export function formatDate(value?: string): string {
 
 export const statusTone: Record<ProcessStatus, Tone> = {
   Draft: 'neutral', WaitingSupplier: 'warning', PreQualReview: 'info', SampleEvaluation: 'info', WaitingAssessment: 'info', InfoRequested: 'warning',
-  WaitingVerification: 'brand', WaitingApproval: 'brand', Completed: 'success',
+  WaitingApproval: 'brand', Completed: 'success',
 };
 
 const resultTone: Record<QslResult, Tone> = { None: 'neutral', Pass: 'success', Fail: 'danger' };
@@ -30,7 +30,7 @@ const levelTone: Record<number, Tone> = { 1: 'warning', 2: 'success', 3: 'brand'
 export const LevelBadge = ({ level }: { level?: number }) => (level ? <Badge tone={levelTone[level]} small>Level {level}</Badge> : <span className="text-ink-muted">—</span>);
 
 const capabilityTone: Record<CapabilityStatus, Tone> = {
-  Approved: 'success', Expired: 'danger', Rejected: 'danger', 'Revision requested': 'warning', 'Pending central verification': 'brand', 'Pending buyer approval': 'brand', 'In assessment': 'info',
+  Approved: 'success', Expired: 'danger', Rejected: 'danger', 'Revision requested': 'warning', 'Pending buyer approval': 'brand', 'In assessment': 'info',
 };
 export const CapabilityBadge = ({ status }: { status: CapabilityStatus }) => <Badge tone={capabilityTone[status]} small dot>{status}</Badge>;
 

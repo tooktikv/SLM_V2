@@ -148,8 +148,3 @@ export const orgStructures: Record<string, OrgNode> = {
 export function flattenOrg(node: OrgNode): OrgNode[] {
   return [node, ...(node.children ?? []).flatMap(flattenOrg)];
 }
-
-// Legal entities we trade with that have no supplier record in SLM.
-export function unregisteredEntities(root: OrgNode) {
-  return flattenOrg(root).filter(node => node.relation !== 'Plant / branch' && !node.supplierId && node.engagement.length > 0);
-}

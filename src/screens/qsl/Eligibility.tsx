@@ -74,10 +74,10 @@ export function EligibilityTab({ actor, onGo }: { actor: Actor; onGo: (section: 
         {view === 'pending' && (<>
           <TableContainer>
             <Table minWidth={860}>
-              <HeadRow columns={['No.', 'Supplier', 'Category / Scope', 'Waiting for', 'Status', 'Owner']} />
+              <HeadRow columns={['No.', 'Supplier', 'Category / Scope', 'Status', 'Owner']} />
               <tbody>{pending.map(row => (
                 <Tr key={row.id}><Td className="font-mono text-caption">{row.qslNo}</Td><Td className="font-medium text-ink">{row.supplierName}</Td><Td>{row.category}<div className="text-caption text-ink-muted">{row.scope}</div></Td>
-                  <Td><Badge small tone={row.waitingFor === 'Capability' ? 'brand' : 'info'}>{row.waitingFor}</Badge></Td><Td>{row.statusLabel}</Td><Td>{row.owner}</Td></Tr>
+                  <Td>{row.statusLabel}</Td><Td>{row.owner}</Td></Tr>
               ))}</tbody>
             </Table>
           </TableContainer>

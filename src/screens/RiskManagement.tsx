@@ -1,10 +1,10 @@
 import Header from '../components/Header';
 import StatusBadge from '../components/StatusBadge';
 import ExportButton from '../components/ExportButton';
-import { suppliers } from '../data/suppliers';
+import { useState } from 'react';
+import { suppliers, type Supplier } from '../data/suppliers';
 import { useNavigation } from '../NavigationContext';
-import { RiskAssessment, RiskMonitoring } from './risk/RiskSections';
-import { Button, Card, CardBody, CardHeader, Grid, HeadRow, KpiCard, KpiGrid, Page, PageContent, Table, TableContainer, Td, Tr, cx, type Tone } from '../components/ui';
+import { Badge, Button, Card, CardBody, CardHeader, EmptyState, Grid, HeadRow, KpiCard, KpiGrid, Page, PageContent, SearchInput, Select, Table, TableContainer, Td, Toolbar, Tr, cx, type Tone } from '../components/ui';
 
 const riskSuppliers = [
   { name: 'Titan Industries Ltd', id: 'SUP-0012', overall: 'Critical', score: 91, financial: 'High', operational: 'Critical', quality: 'Medium', esg: 'High', cyber: 'Low', trend: '↑', owner: 'S. Chen' },
@@ -45,6 +45,11 @@ const riskDetail = [
   { risk: 'Single-source dependency — 68% of ball bearing supply', severity: 'High', impact: 'Production halt risk', mitigation: 'Dual-source strategy in progress', owner: 'L. Torres', due: 'Dec 31', supplier: 'GlobalTech Mfg' },
 ];
 
+// MOCK: score per supplier master risk label until the risk provider is connected.
+const scoreOf = (supplier: Supplier) => (supplier.risk === 'Critical' ? 78 : supplier.risk === 'High Risk' ? 68 : supplier.risk === 'Medium Risk' ? 46 : 24);
+const levelTone = (risk: string): Tone => (risk === 'Critical' || risk === 'High Risk' ? 'danger' : 'warning');
+const riskLevels = ['Critical', 'High Risk', 'Medium Risk'];
+
 const trendTone: Record<string, string> = { '↑': 'text-danger-600', '↓': 'text-success-600', '→': 'text-ink-muted' };
 const trendLabel: Record<string, string> = { '↑': 'Trending up', '↓': 'Trending down', '→': 'Stable' };
 
@@ -57,7 +62,9 @@ function RiskCell({ level, label }: { level: number; label: string }) {
 }
 
 export default function RiskManagement() {
-  const { openSupplier, section } = useNavigation();
+  const { openSupplier } = useNavigation();
+  const [search, setSearch] = useState('');
+  const [level, setLevel] = useState('');
   const openSupplierByName = (name: string) => {
     const supplier = suppliers.find(item => item.name.startsWith(name) || name.startsWith(item.name.split(' ')[0]));
     if (supplier) openSupplier(supplier, 'Risk');
@@ -70,20 +77,15 @@ export default function RiskManagement() {
     { l: 'Low Risk', v: count('Low Risk'), tone: 'success' },
     { l: 'Trending Up', v: riskSuppliers.filter(item => item.trend === '↑').length, tone: 'danger' },
   ];
-  const title = section === 'assessment' ? 'Risk Assessment' : section === 'monitoring' ? 'Monitoring & Alerts' : 'Risk Overview';
-
-  if (section === 'assessment' || section === 'monitoring') {
-    return (
-      <Page>
-        <Header breadcrumb={['Monitor', 'Risk Management']} title={title} />
-        <PageContent>{section === 'assessment' ? <RiskAssessment onOpen={supplier => openSupplier(supplier, 'Risk')} /> : <RiskMonitoring onOpen={supplier => openSupplier(supplier, 'Risk')} />}</PageContent>
-      </Page>
-    );
-  }
+  // Suppliers that carry a risk (anything above Low), highest score first.
+  const atRisk = suppliers.filter(supplier => riskLevels.includes(supplier.risk)).sort((a, b) => scoreOf(b) - scoreOf(a));
+  const listed = atRisk
+    .filter(supplier => !level || supplier.risk === level)
+    .filter(supplier => [supplier.name, supplier.id, supplier.category, supplier.owner].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
 
   return (
     <Page>
-      <Header breadcrumb={['Monitor', 'Risk Management']} title={title} />
+      <Header breadcrumb={['Monitor', 'Risk Management']} title="Risk Overview" />
       <PageContent>
 
         {/* KPI Row */}
@@ -193,6 +195,39 @@ export default function RiskManagement() {
               </tbody>
             </Table>
           </TableContainer>
+        </Card>
+
+        {/* Suppliers with a risk */}
+        <Card className="overflow-hidden">
+          <div className="border-b border-line-subtle p-4">
+            <Toolbar
+              title="Suppliers with risk"
+              description={`${listed.length} of ${atRisk.length} suppliers`}
+              actions={<ExportButton filename="slm-suppliers-with-risk" columns={['Supplier ID', 'Supplier', 'Category', 'Risk level', 'Risk score', 'Owner', 'Last assessed']} rows={listed.map(supplier => [supplier.id, supplier.name, supplier.category, supplier.risk, scoreOf(supplier), supplier.owner, supplier.lastUpdated ?? supplier.lastReview])} />}
+            >
+              <SearchInput placeholder="Search supplier, category or owner" value={search} onChange={event => setSearch(event.target.value)} />
+              <Select aria-label="Risk level" value={level} onChange={event => setLevel(event.target.value)}><option value="">All risk levels</option>{riskLevels.map(item => <option key={item}>{item}</option>)}</Select>
+            </Toolbar>
+          </div>
+          <TableContainer>
+            <Table minWidth={860}>
+              <HeadRow columns={['Supplier', 'Category', 'Risk level', 'Risk score', 'Owner', 'Last assessed', '']} />
+              <tbody>
+                {listed.map(supplier => (
+                  <Tr key={supplier.id}>
+                    <Td><div className="font-medium text-ink">{supplier.name}</div><div className="font-mono text-caption text-ink-muted">{supplier.id}</div></Td>
+                    <Td className="text-ink-muted">{supplier.category}</Td>
+                    <Td><Badge small tone={levelTone(supplier.risk)}>{supplier.risk}</Badge></Td>
+                    <Td><span className={cx('text-sm font-semibold tabular-nums', scoreOf(supplier) >= 68 ? 'text-danger-700' : 'text-warning-700')}>{scoreOf(supplier)}</span></Td>
+                    <Td>{supplier.owner}</Td>
+                    <Td className="whitespace-nowrap text-ink-muted">{supplier.lastUpdated ?? supplier.lastReview}</Td>
+                    <Td><Button size="xs" variant="link" onClick={() => openSupplier(supplier, 'Risk')}>Open risk profile</Button></Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Table>
+          </TableContainer>
+          {listed.length === 0 && <EmptyState title="No suppliers match these filters" />}
         </Card>
       </PageContent>
     </Page>

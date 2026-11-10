@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangleIcon, CheckCircleIcon, CloseIcon, InboxIcon, InfoIcon } from '../icons';
+import { AlertTriangleIcon, CheckCircleIcon, CloseIcon, InboxIcon, InfoIcon, SparklesIcon } from '../icons';
 import { translate, tx, useT } from '../../i18n';
 import { cx, toneFill, toneSoft, type Tone } from './tones';
 
@@ -137,6 +137,7 @@ export function Modal({
   eyebrow,
   badge,
   onClose,
+  onFillSample,
   closeLabel = 'Close',
   children,
 }: {
@@ -144,6 +145,7 @@ export function Modal({
   eyebrow?: ReactNode;
   badge?: ReactNode;
   onClose: () => void;
+  onFillSample?: () => void;
   closeLabel?: string;
   children: ReactNode;
 }) {
@@ -183,15 +185,22 @@ export function Modal({
             </h2>
             {badge && <div className="mt-2">{badge}</div>}
           </div>
-          <button
-            ref={closeRef}
-            type="button"
-            aria-label={translate(closeLabel)}
-            onClick={onClose}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control text-ink-soft transition-colors hover:bg-sunken hover:text-ink"
-          >
-            <CloseIcon className="h-4 w-4" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {onFillSample && (
+              <button type="button" onClick={onFillSample} className="inline-flex h-8 items-center gap-1.5 rounded-control border border-dashed border-brand-300 bg-brand-50 px-2.5 text-caption font-semibold text-brand-700 transition-colors hover:bg-brand-100">
+                <SparklesIcon className="h-3.5 w-3.5" />{translate('Fill sample data')}
+              </button>
+            )}
+            <button
+              ref={closeRef}
+              type="button"
+              aria-label={translate(closeLabel)}
+              onClick={onClose}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control text-ink-soft transition-colors hover:bg-sunken hover:text-ink"
+            >
+              <CloseIcon className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         <div className="space-y-6 p-6">{children}</div>
       </section>

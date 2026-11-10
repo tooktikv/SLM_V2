@@ -7,6 +7,7 @@ import {
   closeSample, createSampleRequest, currentBuyer, receiveSample, resendSampleRequest, sendSampleRequest, sharedSampleStatus, simulateSampleResponse, startEvaluation, submitEvaluation,
   type SharedSampleStatus,
 } from '../samples';
+import { cycle, isoInDays } from '../lib/demo';
 import { Badge, Button, Callout, Checkbox, DetailGrid, Eyebrow, Field, Input, Modal, Select, Textarea, type Tone } from './ui';
 
 export const sharedStatusTone: Record<SharedSampleStatus, Tone> = {
@@ -14,6 +15,13 @@ export const sharedStatusTone: Record<SharedSampleStatus, Tone> = {
 };
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : 'Something went wrong');
+
+const sampleProducts: { product: string; spec: string; qty: string }[] = [
+  { product: 'Alloy sheet AL-6082', spec: 'T6 · 2 mm · EN 485', qty: '20 sheets' },
+  { product: 'Steel fastener M10', spec: 'A2-70 · DIN 933', qty: '200 pcs' },
+  { product: 'Control board assembly', spec: 'CB-210 Rev C · 24 V', qty: '5 units' },
+  { product: 'Packaging film PF-40', spec: '40 µm · food grade', qty: '2 rolls' },
+];
 
 export function NewSampleModal({ supplierId: fixedSupplierId, onClose }: { supplierId?: string; onClose: () => void }) {
   const types = getConfig('samples').requestTypes.filter(item => item.active);
@@ -26,10 +34,23 @@ export function NewSampleModal({ supplierId: fixedSupplierId, onClose }: { suppl
   const [requiredDate, setRequiredDate] = useState('');
   const [sendNow, setSendNow] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fills, setFills] = useState(0);
   const type = types.find(item => item.id === typeId);
   const requirements = getConfig('samples').requirements.filter(item => item.requestTypeId === typeId);
   const supplier = suppliers.find(item => item.id === supplierId);
 
+  const fillSample = () => {
+    const sample = cycle(sampleProducts, fills);
+    if (!fixedSupplierId && suppliers.length) setSupplierId(cycle(suppliers, fills).id);
+    if (types.length) setTypeId(cycle(types, fills).id);
+    setProduct(sample.product);
+    setSpec(sample.spec);
+    setQty(sample.qty);
+    setPurpose(cycle(samplePurposes, fills));
+    setRequiredDate(isoInDays(21));
+    setError(null);
+    setFills(fills + 1);
+  };
   const submit = () => {
     try {
       if (!supplierId) throw new Error('Please select a supplier');
@@ -40,7 +61,7 @@ export function NewSampleModal({ supplierId: fixedSupplierId, onClose }: { suppl
   };
 
   return (
-    <Modal title="New sample request" eyebrow={supplier ? `${supplier.name} · ${getExternalSupplierId(supplierId) ?? supplierId}` : 'Select a supplier'} onClose={onClose} closeLabel="Close">
+    <Modal title="New sample request" eyebrow={supplier ? `${supplier.name} · ${getExternalSupplierId(supplierId) ?? supplierId}` : 'Select a supplier'} onClose={onClose} onFillSample={fillSample} closeLabel="Close">
       <div className="space-y-4">
         {error && <Callout tone="danger" title={error} />}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

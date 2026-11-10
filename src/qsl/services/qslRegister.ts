@@ -3,9 +3,9 @@ import { clone, getStore, todayIso } from '../store.ts';
 import { assertCan } from '../rbac.ts';
 import { daysBetween } from '../dates.ts';
 import { statusLabel } from '../labels.ts';
-import { findSupplier, isOpen } from './assessments.ts';
+import { findSupplier, isOpen, userName } from './assessments.ts';
 import { checkEligibility, type EligibilityChecks } from './publishing.ts';
-import { expiryOf, isApproved, isEnrolled, keyOf, latestEnrolled, latestPerKey, ownerOf, scopeLabel as scopeText, skillNames, toDirectory, validityOf, verifiedSkills, visibleQsls, type Standing } from './queries.ts';
+import { expiryOf, isApproved, isEnrolled, keyOf, latestEnrolled, latestPerKey, ownerOf, scopeLabel as scopeText, skillNames, toDirectory, validityOf, assessedSkills, visibleQsls, type Standing } from './queries.ts';
 
 // ---------------------------------------------------------------- 5.2 Eligibility
 
@@ -39,14 +39,14 @@ export function listEligibility(actor: Actor) {
       id: qsl.id, qslNo: qsl.qslNo, supplierId: qsl.supplierId, supplierName: findSupplier(qsl.supplierId).name, category: qsl.category,
       scopeType: qsl.enrollment?.scopeType ?? qsl.scopeType, scopeDetail: qsl.enrollment?.scopeDetail ?? qsl.scopeDetail,
       state: published ? 'Published' : result.eligible ? 'Eligible' : 'NotEligible', withdrawn: !!qsl.enrollment?.withdrawal, checks: result.checks, reasons: result.reasons,
-      level: qsl.enrollment?.level, skills: verifiedSkills(qsl), qualificationExpiry: qsl.decision?.expiryDate, qualificationEffective: qsl.decision?.effectiveDate,
+      level: qsl.enrollment?.level, skills: assessedSkills(qsl), qualificationExpiry: qsl.decision?.expiryDate, qualificationEffective: qsl.decision?.effectiveDate,
     };
   });
   const order: Record<EligibilityState, number> = { Eligible: 0, NotEligible: 1, Published: 2 };
   rows.sort((a, b) => order[a.state] - order[b.state] || a.supplierName.localeCompare(b.supplierName));
   const pending = visible.filter(isOpen).map(qsl => ({
     id: qsl.id, qslNo: qsl.qslNo, supplierName: findSupplier(qsl.supplierId).name, category: qsl.category, scope: scopeText(qsl.scopeType, qsl.scopeDetail),
-    waitingFor: qsl.status === 'WaitingVerification' ? 'Capability' as const : 'Qualification' as const, statusLabel: statusLabel[qsl.status], owner: ownerOf(qsl),
+    statusLabel: statusLabel[qsl.status], owner: ownerOf(qsl),
   }));
   const counts = { eligible: 0, notEligible: 0, published: 0, pending: pending.length };
   rows.forEach(row => { counts[row.state === 'Eligible' ? 'eligible' : row.state === 'NotEligible' ? 'notEligible' : 'published'] += 1; });
@@ -112,8 +112,8 @@ export function qslReport(actor: Actor, kind: ReportKind): Report {
     }
     case 'capability':
       return {
-        title: 'Supplier by capability', description: 'Approved (centrally verified) skill ratings of published suppliers',
-        columns: ['Capability / skill', 'Supplier', 'Category', 'Verified level'],
+        title: 'Supplier by capability', description: 'Approved skill ratings of published suppliers',
+        columns: ['Capability / skill', 'Supplier', 'Category', 'Assessed level'],
         rows: rows.filter(row => row.standing !== 'Withdrawn').flatMap(row => row.skills.map(skill => [skill.name, row.supplierName, row.category, `Level ${skill.level}`])).sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1])),
       };
     case 'expiry':
@@ -152,28 +152,22 @@ export const listProcessSettingsHistory = (actor: Actor) => {
 
 // ---------------------------------------------------------------- 4.2 Capability register
 
-export type CapabilityStatus = 'Approved' | 'Expired' | 'Rejected' | 'Revision requested' | 'Pending central verification' | 'Pending buyer approval' | 'In assessment';
-export type CapabilitySkill = { skillId: string; name: string; self?: Level; proposed?: Level; verified?: Level; action?: 'Confirmed' | 'Adjusted' };
+export type CapabilityStatus = 'Approved' | 'Expired' | 'Rejected' | 'Revision requested' | 'Pending buyer approval' | 'In assessment';
+export type CapabilitySkill = { skillId: string; name: string; self?: Level; assessed?: Level };
 
 const capabilityStatusOf = (qsl: Qsl): CapabilityStatus => {
   const status: ProcessStatus = qsl.status;
   if (status === 'Completed') return qsl.result === 'Fail' ? 'Rejected' : validityOf(qsl) === 'Expired' ? 'Expired' : 'Approved';
   if (status === 'InfoRequested') return 'Revision requested';
-  if (status === 'WaitingVerification') return 'Pending central verification';
   if (status === 'WaitingApproval') return 'Pending buyer approval';
   return 'In assessment';
 };
 
 function capabilitySkills(qsl: Qsl): CapabilitySkill[] {
   const names = skillNames(qsl);
-  const verification = qsl.verifications[qsl.verifications.length - 1];
-  return [...names.entries()].map(([skillId, name]) => {
-    const decision = verification?.decisions.find(item => item.skillId === skillId);
-    return {
-      skillId, name, self: qsl.selfRatings.find(item => item.skillId === skillId)?.level, proposed: qsl.proposedRatings.find(item => item.skillId === skillId)?.level,
-      verified: decision?.verifiedLevel, action: decision?.action,
-    };
-  });
+  return [...names.entries()].map(([skillId, name]) => ({
+    skillId, name, self: qsl.selfRatings.find(item => item.skillId === skillId)?.level, assessed: qsl.assessedAt ? qsl.assessedRatings.find(item => item.skillId === skillId)?.level : undefined,
+  }));
 }
 
 export type CapabilityRow = {
@@ -189,19 +183,18 @@ export type CapabilityRow = {
   validFrom?: string;
   validUntil?: string;
   daysLeft?: number;
-  centralReview?: { by: string; at: string; adjusted: number };
+  assessment?: { by: string; at: string };
   buyerApproval?: { by: string; at: string; decision: string };
 };
 
 function toCapability(qsl: Qsl): CapabilityRow {
-  const verification = qsl.verifications[qsl.verifications.length - 1];
   const approval = qsl.approvals[qsl.approvals.length - 1];
   const expiry = qsl.decision?.expiryDate;
   return {
     id: qsl.id, qslNo: qsl.qslNo, supplierId: qsl.supplierId, supplierName: findSupplier(qsl.supplierId).name, category: qsl.category, scope: scopeText(qsl.scopeType, qsl.scopeDetail), round: qsl.round,
     status: capabilityStatusOf(qsl), skills: capabilitySkills(qsl), validFrom: isApproved(qsl) ? qsl.decision?.effectiveDate : undefined, validUntil: isApproved(qsl) ? expiryOf(qsl) ?? expiry : undefined,
     daysLeft: isApproved(qsl) && (expiryOf(qsl) ?? expiry) ? daysBetween(todayIso(), (expiryOf(qsl) ?? expiry)!) : undefined,
-    centralReview: verification ? { by: verification.verifierName, at: verification.at, adjusted: verification.decisions.filter(item => item.action === 'Adjusted').length } : undefined,
+    assessment: qsl.assessedAt ? { by: userName(qsl.assessedBy ?? ''), at: qsl.assessedAt } : undefined,
     buyerApproval: approval && qsl.status === 'Completed' ? { by: approval.byName, at: approval.at, decision: approval.decision } : undefined,
   };
 }
@@ -226,18 +219,18 @@ export function listCapabilities(actor: Actor, filter: { search?: string; catego
   return clone({ rows, counts, total: all.length });
 }
 
-// Verified ratings of every round for the same supplier and category, newest first, with the change against the previous round.
+// Assessed ratings of every round for the same supplier and category, newest first, with the change against the previous round.
 export function getCapabilityHistory(actor: Actor, id: string) {
   assertCan(actor, 'directory.view');
   const base = visibleQsls(actor).find(qsl => qsl.id === id);
   if (!base) return clone([]);
-  const rounds = visibleQsls(actor).filter(qsl => qsl.supplierId === base.supplierId && qsl.category === base.category && qsl.verifications.length > 0).sort((a, b) => a.round - b.round);
+  const rounds = visibleQsls(actor).filter(qsl => qsl.supplierId === base.supplierId && qsl.category === base.category && !!qsl.assessedAt).sort((a, b) => a.round - b.round);
   const entries = rounds.map((qsl, index) => {
     const skills = capabilitySkills(qsl);
     const before = index > 0 ? capabilitySkills(rounds[index - 1]) : [];
     return {
-      id: qsl.id, qslNo: qsl.qslNo, round: qsl.round, at: qsl.verifications[qsl.verifications.length - 1].at, status: capabilityStatusOf(qsl),
-      skills: skills.map(skill => ({ ...skill, change: before.length && skill.verified !== undefined ? skill.verified - (before.find(item => item.skillId === skill.skillId)?.verified ?? skill.verified) : 0 })),
+      id: qsl.id, qslNo: qsl.qslNo, round: qsl.round, at: qsl.assessedAt!, status: capabilityStatusOf(qsl),
+      skills: skills.map(skill => ({ ...skill, change: before.length && skill.assessed !== undefined ? skill.assessed - (before.find(item => item.skillId === skill.skillId)?.assessed ?? skill.assessed) : 0 })),
     };
   });
   return clone(entries.reverse());

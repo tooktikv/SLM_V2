@@ -1,10 +1,10 @@
 import { Fragment, useState } from 'react';
 import Header from '../components/Header';
 import { ChevronDownIcon, ChevronRightIcon } from '../components/icons';
-import { ALL_CATEGORIES, categorySummary, performanceSuppliers, productCategories, scopeView, type PerfScores } from '../data/performance';
+import { ALL_CATEGORIES, performanceSuppliers, productCategories, scopeView, type PerfScores } from '../data/performance';
 import { suppliers as supplierDirectory } from '../data/suppliers';
 import { useNavigation } from '../NavigationContext';
-import { Badge, Button, Card, CardBody, CardHeader, ColumnChart, EmptyState, Eyebrow, Grid, HeadRow, KpiCard, KpiGrid, Page, PageContent, ProgressBar, SegmentedControl, Select, Table, TableContainer, Td, Tr, cx, toneText, type Tone } from '../components/ui';
+import { Button, Card, CardBody, CardHeader, ColumnChart, EmptyState, Grid, HeadRow, KpiCard, KpiGrid, Page, PageContent, ProgressBar, SegmentedControl, Select, Table, TableContainer, Td, Toolbar, Tr, cx, toneText, type Tone } from '../components/ui';
 
 const months = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'];
 
@@ -46,13 +46,6 @@ function ScoreCells({ row }: { row: PerfScores }) {
   );
 }
 
-function ScoreAction({ score }: { score: number }) {
-  const { navigate } = useNavigation();
-  if (score < 65) return <Button size="xs" variant="danger-soft" onClick={() => navigate('car')}>Create CAR</Button>;
-  if (score < 80) return <Button size="xs" variant="warning-soft" onClick={() => navigate('relationship')}>Schedule Review</Button>;
-  return null;
-}
-
 export default function Performance() {
   const { openSupplier } = useNavigation();
   const [category, setCategory] = useState(ALL_CATEGORIES);
@@ -78,22 +71,11 @@ export default function Performance() {
       <Header breadcrumb={['Monitor']} title="Supplier Performance" />
       <PageContent>
 
-        <Card className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4">
-          <Eyebrow>Product category</Eyebrow>
-          <div className="flex flex-wrap gap-2">
-            {[ALL_CATEGORIES, ...productCategories].map(item => {
-              const active = item === category;
-              const count = item === ALL_CATEGORIES ? performanceSuppliers.length : performanceSuppliers.filter(supplier => supplier.category === item).length;
-              return (
-                <Button key={item} variant={active ? 'primary' : 'secondary'} aria-pressed={active} onClick={() => setCategory(item)}>
-                  {item}
-                  <span className={cx('tabular-nums', active ? 'text-white/70' : 'text-ink-muted')}>{count}</span>
-                </Button>
-              );
-            })}
-          </div>
-          <span className="text-caption text-ink-muted max-xl:basis-full xl:ml-auto">Scorecards, trend and benchmarking follow the selected category.</span>
-        </Card>
+        <Toolbar title="Performance overview" description="Scorecards, trend and benchmarking follow the selected category.">
+          <Select aria-label="Product category" value={category} onChange={event => setCategory(event.target.value)}>
+            {[ALL_CATEGORIES, ...productCategories].map(item => <option key={item} value={item}>{`${item} (${item === ALL_CATEGORIES ? performanceSuppliers.length : performanceSuppliers.filter(supplier => supplier.category === item).length})`}</option>)}
+          </Select>
+        </Toolbar>
 
         <KpiGrid cols={4}>
           <KpiCard label={isAll ? 'Portfolio score' : `${category} score`} value={`${scope.overall.toFixed(1)}%`} note="Weighted across KPIs" tone="brand" size="md" />
@@ -155,47 +137,18 @@ export default function Performance() {
           </Card>
         </Grid>
 
-        {/* Category comparison */}
-        <Card className="overflow-hidden">
-          <CardHeader title="Performance by product category" description="Select a category to filter the scorecards and benchmarking below" />
-          <TableContainer>
-            <Table minWidth={900}>
-              <HeadRow columns={['Product category', 'Suppliers', 'Products', 'Overall', 'Delivery', 'Quality', 'Cost', 'Responsiveness', 'Trend (6 mo)', '']} />
-              <tbody>
-                {productCategories.map(item => {
-                  const summary = categorySummary(item);
-                  const active = item === category;
-                  return (
-                    <Tr key={item} onClick={() => setCategory(active ? ALL_CATEGORIES : item)} className={active ? 'bg-brand-50/60' : ''}>
-                      <Td className="font-medium text-ink">{item}</Td>
-                      <Td className="tabular-nums">{summary.suppliers}</Td>
-                      <Td className="tabular-nums">{summary.products}</Td>
-                      <ScoreCells row={summary} />
-                      <Td className={cx('whitespace-nowrap font-medium tabular-nums', summary.trendDelta > 0 ? 'text-success-700' : summary.trendDelta < 0 ? 'text-danger-700' : 'text-ink-muted')}>{signed(summary.trendDelta)} pts</Td>
-                      <Td>{active ? <Badge tone="brand" small>Filtered</Badge> : <Button variant="link" onClick={() => setCategory(item)}>View products</Button>}</Td>
-                    </Tr>
-                  );
-                })}
-              </tbody>
-            </Table>
-          </TableContainer>
-        </Card>
-
         {/* Benchmarking table */}
         <Card className="overflow-hidden">
           <CardHeader
             title={view === 'supplier' ? 'Supplier Benchmarking' : 'Product Benchmarking'}
             description={`${isAll ? 'All categories' : category} · ${view === 'supplier' ? `${inScope.length} suppliers` : `${productRows.length} products`}`}
             actions={
-              <>
-                <SegmentedControl
-                  label="Benchmark view"
-                  value={view}
-                  onChange={setView}
-                  items={[{ value: 'supplier', label: 'By supplier' }, { value: 'product', label: 'By product' }]}
-                />
-                <Button variant="primary">+ New Review</Button>
-              </>
+              <SegmentedControl
+                label="Benchmark view"
+                value={view}
+                onChange={setView}
+                items={[{ value: 'supplier', label: 'By supplier' }, { value: 'product', label: 'By product' }]}
+              />
             }
           />
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line-subtle px-5 py-2.5">
@@ -231,14 +184,14 @@ export default function Performance() {
                           </Td>
                           <Td className="text-ink-muted">{supplier.category}</Td>
                           <ScoreCells row={supplier} />
-                          <Td><ScoreAction score={supplier.score} /></Td>
+                          <Td><Button size="xs" variant="link" onClick={() => openSupplierByName(supplier.name)}>View performance</Button></Td>
                         </Tr>
                         {open && supplier.products.map(product => (
                           <Tr key={`${supplier.name}-${product.name}`} className="bg-canvas/70">
                             <Td className="pl-11 text-ink-soft">{product.name}</Td>
                             <Td className="text-ink-muted">{supplier.category}</Td>
                             <ScoreCells row={product} />
-                            <Td><ScoreAction score={product.score} /></Td>
+                            <Td />
                           </Tr>
                         ))}
                       </Fragment>
@@ -256,7 +209,7 @@ export default function Performance() {
                       <Td><Button variant="inline" size="md" onClick={() => openSupplierByName(product.supplier)}>{product.supplier}</Button></Td>
                       <Td className="text-ink-muted">{product.category}</Td>
                       <ScoreCells row={product} />
-                      <Td><ScoreAction score={product.score} /></Td>
+                      <Td><Button size="xs" variant="link" onClick={() => openSupplierByName(product.supplier)}>View performance</Button></Td>
                     </Tr>
                   ))}
                 </tbody>

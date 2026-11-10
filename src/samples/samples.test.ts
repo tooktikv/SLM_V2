@@ -4,7 +4,7 @@ import { sampleRequests } from '../data/samples.ts';
 import { listTransactions, resetIntegration, updateSystem } from '../integration/index.ts';
 import { resetConfig, updateConfig } from '../config/index.ts';
 import {
-  SampleError, closeSample, createSampleRequest, currentBuyer, findSample, getSampleSummary, receiveSample, resendSampleRequest, sendSampleRequest, sharedSampleStatus, simulateSampleResponse,
+  SampleError, closeSample, createSampleRequest, currentBuyer, findSample, receiveSample, resendSampleRequest, sendSampleRequest, sharedSampleStatus, simulateSampleResponse,
   startEvaluation, submitEvaluation,
 } from './index.ts';
 
@@ -39,7 +39,6 @@ describe('Creating and sending sample requests', () => {
     const sample = create();
     updateSystem('SupplierPortal', { failNext: 1 });
     assert.equal(sendSampleRequest(currentBuyer, sample.id).portal?.sync, 'Failed');
-    assert.equal(getSampleSummary().portalFailures, 1);
     assert.equal(resendSampleRequest(currentBuyer, sample.id).portal?.sync, 'Sent');
   });
 });
@@ -109,6 +108,5 @@ describe('Existing sample data', () => {
     const all = Object.values(sampleRequests).flat();
     const mapped = new Set(all.map(item => `${item.status}>${sharedSampleStatus(item)}`));
     assert.deepEqual([...mapped].sort(), ['Approved>Accepted', 'Conditional>Accepted', 'In transit>Submitted', 'Received>Submitted', 'Rejected>Failed', 'Requested>Requested', 'Under testing>Under Evaluation']);
-    assert.equal(getSampleSummary().total, all.length);
   });
 });

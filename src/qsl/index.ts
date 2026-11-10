@@ -11,3 +11,5 @@ export * from './services/queries.ts';
 export * from './services/publishing.ts';
 export * from './services/qslRegister.ts';
 export { seedMasterData } from './seed.ts';
+export * from './services/portalModel.ts';
+export * from './services/portal.ts';

@@ -3,6 +3,7 @@ import { suppliers } from '../data/suppliers';
 import { getConfig } from '../config';
 import { assignTask, createTask } from '../tasks';
 import type { TaskActor } from '../tasks';
+import { cycle, isoInDays } from '../lib/demo';
 import { Button, Callout, Checkbox, Field, Input, Modal, Select, Textarea } from './ui';
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : 'Something went wrong');
@@ -19,6 +20,7 @@ export function NewTaskModal({ actor, supplierId: initialSupplierId, onClose, on
   const [dueDate, setDueDate] = useState('');
   const [assignNow, setAssignNow] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fills, setFills] = useState(0);
   const template = templates.find(item => item.id === templateId);
   const type = types.find(item => item.id === (template?.taskTypeId ?? typeId));
 
@@ -27,6 +29,14 @@ export function NewTaskModal({ actor, supplierId: initialSupplierId, onClose, on
     const next = templates.find(item => item.id === id);
     setTitle(next?.name ?? '');
     setInstructions(next?.instructions ?? '');
+  };
+  const fillSample = () => {
+    if (!initialSupplierId && suppliers.length) setSupplierId(cycle(suppliers, fills).id);
+    if (templates.length) pickTemplate(cycle(templates, fills).id);
+    setDueDate(isoInDays(14));
+    setAssignNow(true);
+    setError(null);
+    setFills(fills + 1);
   };
   const submit = () => {
     try {
@@ -37,7 +47,7 @@ export function NewTaskModal({ actor, supplierId: initialSupplierId, onClose, on
   };
 
   return (
-    <Modal title="New supplier task" eyebrow="Task assignment" onClose={onClose} closeLabel="Close">
+    <Modal title="New supplier task" eyebrow="Task assignment" onClose={onClose} onFillSample={fillSample} closeLabel="Close">
       <div className="space-y-4">
         {error && <Callout tone="danger" title={error} />}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

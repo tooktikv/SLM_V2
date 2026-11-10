@@ -31,7 +31,7 @@ function setValue(filter: FilterState, value: string) {
   filter.element.props.onChange?.({ target: { value }, currentTarget: { value } } as unknown as ChangeEvent<HTMLSelectElement>);
 }
 
-function FilterButton({ filters }: { filters: FilterState[] }) {
+function FilterButton({ filters, extra }: { filters: FilterState[]; extra?: ReactNode }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, right: 8 });
@@ -101,6 +101,7 @@ function FilterButton({ filters }: { filters: FilterState[] }) {
               </div>
             ))}
           </div>
+          {extra && <div className="border-t border-line-subtle px-4 py-3">{extra}</div>}
           <div className="flex items-center justify-between gap-2 border-t border-line-subtle bg-canvas px-4 py-3">
             <Button size="sm" variant="ghost" disabled={count === 0} onClick={() => filters.forEach(filter => filter.active && setValue(filter, filter.options[0].value))}>Clear filters</Button>
             <Button size="sm" variant="primary" onClick={() => setOpen(false)}>Done</Button>
@@ -112,35 +113,8 @@ function FilterButton({ filters }: { filters: FilterState[] }) {
   );
 }
 
-// A filter control with a visible caption, used by report pages that need date pickers next to selects.
-export function FilterField({ label, active, className, children }: { label?: ReactNode; active?: boolean; className?: string; children: ReactNode }) {
-  return (
-    <label className={cx('block min-w-0', className)}>
-      {label && (
-        <span className={cx('mb-1 flex items-center gap-1.5 text-micro font-semibold uppercase tracking-wide', active ? 'text-brand-700' : 'text-ink-muted')}>
-          {tx(label)}
-          {active && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-brand-600" />}
-        </span>
-      )}
-      {children}
-    </label>
-  );
-}
-
-export function FilterBar({ children, heading, onClear, trailing, className }: { children: ReactNode; heading?: ReactNode; onClear?: () => void; trailing?: ReactNode; className?: string }) {
-  const t = useT();
-  return (
-    <div role="group" aria-label={t('Filters')} className={cx('flex flex-wrap items-end gap-x-3 gap-y-3 rounded-control border border-line-subtle bg-canvas px-3 py-2.5', className)}>
-      <span className="flex h-10 items-center gap-1.5 pr-1 text-caption font-semibold text-ink-soft"><FilterIcon className="h-4 w-4 text-brand-600" />{heading ? tx(heading) : t('Filter by')}</span>
-      {children}
-      {onClear && <Button size="sm" variant="ghost" className="mb-1" onClick={onClear}>Clear filters</Button>}
-      {trailing && <div className="ml-auto flex flex-wrap items-center gap-2 pb-0.5">{trailing}</div>}
-    </div>
-  );
-}
-
-// Selects collapse into one filter icon with a popover and removable chips; the search box, the filter icon and `actions` sit at the right end of the row, with an optional `title` at the left.
-export function Toolbar({ children, actions, className, title, description }: { children: ReactNode; actions?: ReactNode; className?: string; title?: ReactNode; description?: ReactNode }) {
+// Selects collapse into one filter icon with a popover (plus optional `panelExtra` fields below them) and removable chips; the search box, the filter icon and `actions` sit at the right end of the row, with an optional `title` at the left.
+export function Toolbar({ children, actions, className, title, description, panelExtra }: { children: ReactNode; actions?: ReactNode; className?: string; title?: ReactNode; description?: ReactNode; panelExtra?: ReactNode }) {
   const t = useT();
   const items = flatten(children);
   const searches = items.filter(node => isType(node, SearchInput)) as ReactElement<{ className?: string }>[];
@@ -164,7 +138,7 @@ export function Toolbar({ children, actions, className, title, description }: { 
             {hasControls && (
               <div className="flex flex-wrap items-center justify-end gap-2">
                 {searches.map(search => cloneElement(search, { className: 'w-full sm:w-60' }))}
-                {filters.length > 0 && <FilterButton filters={filters} />}
+                {filters.length > 0 && <FilterButton filters={filters} extra={panelExtra} />}
               </div>
             )}
             {hasControls && actions && <span aria-hidden="true" className="mx-1 hidden h-6 w-px bg-line sm:block" />}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Actor, Level, ScopeType, Verdict } from '../../qsl/types';
 import { SCOPE_TYPES } from '../../qsl/types';
-import { decide, proposeRatings, requestMoreInfo, saveEvaluations, submitToVerification } from '../../qsl/services/assessments';
+import { decide, requestMoreInfo, saveAssessedRatings, saveEvaluations, submitAssessment } from '../../qsl/services/assessments';
 import { autoPublishIfConfigured } from '../../qsl/services/publishing';
 import { getSheet, type SheetItem } from '../../qsl/services/queries';
 import { statusLabel, verdictLabel } from '../../qsl/labels';
@@ -26,12 +26,12 @@ function Answer({ item }: { item: SheetItem }) {
   );
 }
 
-// Qualification Assessment (Assessor, Standard + Buyer Custom criteria and proposed skill rating) and the Approval decision (Approver).
+// Qualification Assessment (Assessor: Standard + Buyer Custom criteria and skill rating in one step) and the Approval decision (Approver).
 export function ReviewPage({ actor, id, onDone }: { actor: Actor; id: string; onDone: () => void }) {
   const sheet = useQslQuery(() => getSheet(actor, id), [actor.id, id]);
   const data = sheet.data;
   const [local, setLocal] = useState<Record<string, Local>>({});
-  const [proposed, setProposed] = useState<Record<string, Level | ''>>({});
+  const [rated, setRated] = useState<Record<string, Level | ''>>({});
   const [loadedFor, setLoadedFor] = useState('');
   const [recommended, setRecommended] = useState<'Pass' | 'Fail' | ''>('');
   const [summary, setSummary] = useState('');
@@ -51,7 +51,7 @@ export function ReviewPage({ actor, id, onDone }: { actor: Actor; id: string; on
       initial[item.criteriaId] = { verdict: (evaluation?.verdict as Verdict) ?? '', comment: evaluation?.comment ?? '', requestCorrection: evaluation?.requestCorrection ?? false, message: evaluation?.messageToSupplier ?? '' };
     });
     setLocal(initial);
-    setProposed(Object.fromEntries(data.skills.filter(skill => skill.proposed).map(skill => [skill.id, skill.proposed as Level])));
+    setRated(Object.fromEntries(data.skills.filter(skill => skill.assessed).map(skill => [skill.id, skill.assessed as Level])));
     setRecommended(data.recommended ?? '');
     setSummary(data.evaluationSummary);
     setInternalNote(data.internalNote);
@@ -67,14 +67,13 @@ export function ReviewPage({ actor, id, onDone }: { actor: Actor; id: string; on
   const items = data.sections.flatMap(section => section.items);
   const assessing = data.nextAction === 'assess';
   const approving = data.nextAction === 'approve';
-  const order = ['PreQualReview', 'SampleEvaluation', 'WaitingAssessment', 'InfoRequested', 'WaitingVerification', 'WaitingApproval', 'Completed'];
+  const order = ['PreQualReview', 'SampleEvaluation', 'WaitingAssessment', 'InfoRequested', 'WaitingApproval', 'Completed'];
   const at = order.indexOf(data.status);
   const steps: { label: string; state: StepState }[] = [
     { label: 'Pre-Qualification', state: 'done' },
     { label: 'Assessment', state: at <= 3 ? 'active' : 'done' },
-    { label: 'Skill Verification', state: at === 4 ? 'active' : at > 4 ? 'done' : 'todo' },
-    { label: 'Approval', state: at === 5 ? 'active' : at > 5 ? 'done' : 'todo' },
-    { label: 'QSL eligible', state: at === 6 ? 'done' : 'todo' },
+    { label: 'Approval', state: at === 4 ? 'active' : at > 4 ? 'done' : 'todo' },
+    { label: 'QSL eligible', state: at === 5 ? 'done' : 'todo' },
   ];
 
   const patch = (criteriaId: string, change: Partial<Local>) => setLocal(current => ({ ...current, [criteriaId]: { ...current[criteriaId], ...change } }));
@@ -82,8 +81,8 @@ export function ReviewPage({ actor, id, onDone }: { actor: Actor; id: string; on
     saveEvaluations(actor, id, Object.entries(local).filter(([, value]) => value.verdict).map(([criteriaId, value]) => ({
       criteriaId, verdict: value.verdict as Verdict, comment: value.comment, requestCorrection: value.requestCorrection, messageToSupplier: value.message,
     })));
-    const ratings = Object.entries(proposed).filter(([, level]) => level !== '').map(([skillId, level]) => ({ skillId, level: level as Level }));
-    if (data.useSkillLevel && ratings.length) proposeRatings(actor, id, ratings);
+    const ratings = Object.entries(rated).filter(([, level]) => level !== '').map(([skillId, level]) => ({ skillId, level: level as Level }));
+    if (data.useSkillLevel && ratings.length) saveAssessedRatings(actor, id, ratings);
   };
   const run = (action: () => void, success?: string, leave = false) => { if (attempt(action, setNotice, success) && leave) onDone(); };
 
@@ -145,20 +144,19 @@ export function ReviewPage({ actor, id, onDone }: { actor: Actor; id: string; on
         <div className="space-y-4 xl:col-span-2">
           {data.useSkillLevel && (
             <Card>
-              <CardHeader title="Skill Rating" description="Self-rating, assessor proposal and central verification are stored separately" />
+              <CardHeader title="Skill Rating" description="The supplier self-rating and the assessor rating are stored separately; the assessor rating is the final one" />
               <TableContainer>
                 <Table minWidth={420}>
-                  <HeadRow columns={['Skill', 'Supplier self', 'Proposed', 'Verified']} />
+                  <HeadRow columns={['Skill', 'Supplier self', 'Assessed']} />
                   <tbody>{data.skills.map(skill => (
                     <Tr key={skill.id}>
                       <Td dense>{skill.name}</Td>
                       <Td dense><LevelBadge level={skill.self} /></Td>
                       <Td dense>{assessing ? (
-                        <Select size="sm" aria-label={`Proposed rating ${skill.name}`} value={String(proposed[skill.id] ?? '')} onChange={event => setProposed(current => ({ ...current, [skill.id]: event.target.value ? Number(event.target.value) as Level : '' }))}>
+                        <Select size="sm" aria-label={`Assessed rating ${skill.name}`} value={String(rated[skill.id] ?? '')} onChange={event => setRated(current => ({ ...current, [skill.id]: event.target.value ? Number(event.target.value) as Level : '' }))}>
                           <option value="">—</option>{[1, 2, 3].map(level => <option key={level} value={level}>Level {level}</option>)}
                         </Select>
-                      ) : <LevelBadge level={skill.proposed} />}</Td>
-                      <Td dense>{skill.verified ? <div><LevelBadge level={skill.verified} />{skill.action === 'Adjusted' && <div className="mt-0.5 text-caption text-warning-700">Adjusted: {skill.verifierComment}</div>}</div> : <span className="text-ink-muted">—</span>}</Td>
+                      ) : <LevelBadge level={skill.assessed} />}</Td>
                     </Tr>
                   ))}</tbody>
                 </Table>
@@ -173,25 +171,24 @@ export function ReviewPage({ actor, id, onDone }: { actor: Actor; id: string; on
               <Field label="Overall recommendation" required>
                 <SegmentedControl label="Overall recommendation" value={recommended || 'None'} onChange={value => setRecommended(value === 'None' ? '' : value)} items={[{ value: 'Pass', label: 'Pass' }, { value: 'Fail', label: 'Fail' }, { value: 'None', label: 'Not selected' }]} />
               </Field>
-              <Field label="Assessment summary (shown to Central / Approver)" required><Textarea value={summary} onChange={event => setSummary(event.target.value)} /></Field>
+              <Field label="Assessment summary (shown to the Approver)" required><Textarea value={summary} onChange={event => setSummary(event.target.value)} /></Field>
               <Field label="Internal note"><Textarea value={internalNote} onChange={event => setInternalNote(event.target.value)} /></Field>
               <div className="flex flex-wrap justify-end gap-2">
                 <Button onClick={() => run(persist, 'Draft saved')}>Save draft</Button>
                 <Button onClick={() => run(() => { persist(); requestMoreInfo(actor, id); }, undefined, true)}>Request more information</Button>
-                <Button variant="primary" onClick={() => run(() => { persist(); submitToVerification(actor, id, { recommended: recommended as 'Pass' | 'Fail', summary, internalNote }); }, undefined, true)}>Send to Central Verification</Button>
+                <Button variant="primary" onClick={() => run(() => { persist(); submitAssessment(actor, id, { recommended: recommended as 'Pass' | 'Fail', summary, internalNote }); }, undefined, true)}>Send for approval</Button>
               </div>
             </Card>
           )}
 
           {!assessing && data.status !== 'WaitingSupplier' && (
             <Card padded className="space-y-3">
-              <h3 className="text-sm font-semibold text-ink">Summary from the Assessor and Central Verification</h3>
+              <h3 className="text-sm font-semibold text-ink">Summary from the Assessor</h3>
               <div className="grid grid-cols-3 gap-3 text-center">
                 {(['Compliant', 'NonCompliant', 'NeedsFix'] as Verdict[]).map(verdict => <div key={verdict} className="rounded-control bg-canvas p-2"><div className="text-lg font-semibold tabular-nums text-ink">{counts(verdict)}</div><div className="text-caption text-ink-muted">{verdictLabel[verdict]}</div></div>)}
               </div>
               <div className="text-body"><Eyebrow>Assessor recommendation</Eyebrow>{data.recommended ? (data.recommended === 'Pass' ? 'Pass' : 'Fail') : '—'} · {data.assessor}</div>
               <div className="text-body"><Eyebrow>Assessor comments</Eyebrow>{data.evaluationSummary || '—'}</div>
-              <div className="text-body"><Eyebrow>Central Verifier comments</Eyebrow>{data.verificationComments || '—'}{data.verifierName ? ` · ${data.verifierName}` : ''}</div>
             </Card>
           )}
 

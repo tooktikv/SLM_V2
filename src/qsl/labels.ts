@@ -2,13 +2,13 @@ import type { ProcessStatus, QslResult, Verdict } from './types.ts';
 
 export const statusLabel: Record<ProcessStatus, string> = {
   Draft: 'Draft', WaitingSupplier: 'Waiting for supplier', PreQualReview: 'Pre-qualification review', SampleEvaluation: 'Sample evaluation',
-  WaitingAssessment: 'Waiting for assessment', InfoRequested: 'Info requested', WaitingVerification: 'Waiting for verification', WaitingApproval: 'Waiting for approval', Completed: 'Completed',
+  WaitingAssessment: 'Waiting for assessment', InfoRequested: 'Info requested', WaitingApproval: 'Waiting for approval', Completed: 'Completed',
 };
 
 // What the supplier sees instead of the internal process status.
 export const supplierStatusLabel: Record<ProcessStatus, string> = {
   Draft: 'Request being prepared', WaitingSupplier: 'Action needed: submit information', PreQualReview: 'Under review', SampleEvaluation: 'Sample under evaluation', WaitingAssessment: 'Assessment in progress',
-  InfoRequested: 'Action needed: update information', WaitingVerification: 'Verification in progress', WaitingApproval: 'Decision pending', Completed: 'Completed',
+  InfoRequested: 'Action needed: update information', WaitingApproval: 'Decision pending', Completed: 'Completed',
 };
 
 export const resultLabel: Record<QslResult, string> = { None: 'No result', Pass: 'Passed', Fail: 'Failed' };

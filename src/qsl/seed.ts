@@ -1,14 +1,15 @@
 // MOCK demo data. History is replayed through the real services with a fake clock so every round carries a genuine
-// snapshot, answers, ratings, verification, approval and timeline.
-import type { CriteriaData, Level, ScopeType } from './types.ts';
+// snapshot, answers, ratings, assessment, approval and timeline.
+import type { CriteriaData, Level, ScopeType, Snapshot } from './types.ts';
 import { staff, supplierActor } from './actors.ts';
 import { getStore, resetStore, setClock, supplierCategory } from './store.ts';
 import { addCriteriaToForm, activateForm, createCriteria, createCriteriaGroup, createForm } from './services/criteria.ts';
 import {
-  attachEvidence, completePreReview, createDraft, decide, extendValidity, findQsl, getSnapshot, proposeRatings, recordSample, requestMoreInfo, saveAnswers, saveEvaluations, saveSelfRatings,
-  submitAnswers, submitRequest, submitToVerification, suspendQualification, verifyRatings,
+  attachEvidence, completePreReview, createDraft, decide, extendValidity, findQsl, getSnapshot, saveAssessedRatings, recordSample, requestMoreInfo, saveAnswers, saveEvaluations, saveSelfRatings,
+  submitAnswers, submitRequest, submitAssessment, suspendQualification,
 } from './services/assessments.ts';
 import { publishToQsl, withdrawFromQsl } from './services/publishing.ts';
+import { submitRateCard, portalCriteria, type RateCardInput } from './services/portal.ts';
 
 let ticks = 0;
 function at(date: string): void {
@@ -56,11 +57,24 @@ export function seedMasterData(): void {
 const answerFor = (type: CriteriaData['answerType'], options?: string[]) =>
   type === 'Choice' ? options![0] : type === 'Number' ? 12 : type === 'Date' ? '2026-01-15' : type === 'File' ? 'document.pdf' : type === 'ShortText' ? 'CERT-2026-001' : 'Documented and reviewed procedure';
 
-type Stage = 'draft' | 'submitted' | 'prereview' | 'sample' | 'infoRequested' | 'assessing' | 'verification' | 'approval' | 'approved' | 'rejected';
+type Stage = 'draft' | 'submitted' | 'prereview' | 'sample' | 'infoRequested' | 'assessing' | 'approval' | 'approved' | 'rejected';
 type Step = {
   supplierId: string; category?: string; stage: Stage; reassess?: string; sampleRequired?: boolean; scope?: [ScopeType, string]; publish?: boolean;
-  dates: [request: string, supplier: string, assess: string, verify: string, decide: string]; due?: string; reason?: string; assessor?: 'assessor' | 'assessor2'; approver?: 'approver' | 'approver2';
+  dates: [request: string, supplier: string, assess: string, decide: string]; due?: string; reason?: string; assessor?: 'assessor' | 'assessor2'; approver?: 'approver' | 'approver2';
 };
+
+// What the Supplier Portal would send back: every requested skill offered with two rate lines, and the required documents attached.
+function rateCardFor(snapshot: Snapshot, requiredEvidence: { id: string; mandatory: boolean }[], supplierName: string): RateCardInput {
+  const criteria = portalCriteria(snapshot);
+  const link = (targetId: string, docType: string) => ({ targetId, docId: `DOC-${targetId}`, docName: 'Certificate', docType, version: 1, expiry: '2030-12-31', fileNames: ['certificate.pdf'] });
+  return {
+    version: 1, submittedBy: `${supplierName} contact`, role: 'Supplier Admin',
+    terms: { currency: 'THB', rateBasis: 'Daily', effectiveFrom: '2026-11-01', validUntil: '2027-10-31', leadTimeDays: '14', paymentTermsDays: '45', escalationPct: '3', overtimeWeekday: '1.5', overtimeHoliday: '2', notes: '' },
+    skills: Object.fromEntries(criteria.map(item => [item.id, { offered: 'Yes' as const, selfRating: '3', comment: '', lines: [{ level: '2', headcount: '6', avgYears: '4', rate: '1800' }, { level: '3', headcount: '3', avgYears: '8', rate: '2600' }] }])),
+    evidence: [...criteria.filter(item => item.evidenceRequired).map(item => link(item.id, 'Quality Certification')), ...requiredEvidence.filter(item => item.mandatory).map(item => link(item.id, 'Quality Certification'))],
+    declaration: true,
+  };
+}
 
 function runRound(step: Step): string {
   const coordinator = staff.coordinator;
@@ -83,6 +97,7 @@ function runRound(step: Step): string {
   saveAnswers(supplier, draft.id, snapshot.criteria.filter(item => item.data.answerType !== 'File').map(item => ({ criteriaId: item.id, value: answerFor(item.data.answerType, item.data.options) })));
   snapshot.criteria.filter(item => item.data.evidenceRequired).forEach(item => attachEvidence(supplier, draft.id, item.id, `${item.data.code}-evidence.pdf`));
   saveSelfRatings(supplier, draft.id, snapshot.skills.map(skill => ({ skillId: skill.id, level: 3 })));
+  submitRateCard(supplier, draft.id, rateCardFor(snapshot, findQsl(draft.id).portal.requiredEvidence, findSupplierName(step.supplierId)));
   submitAnswers(supplier, draft.id);
   if (step.stage === 'prereview') return draft.id;
   completePreReview(coordinator, draft.id, { infoChecked: true, documentsChecked: true, decision: 'Proceed', comment: 'Company information and documents checked' });
@@ -94,25 +109,16 @@ function runRound(step: Step): string {
     requestMoreInfo(assessor, draft.id);
     return draft.id;
   }
-  const proposed = (index: number): Level => ((index % 3) + 1) as Level;
+  const rated = (index: number): Level => ((index % 3) + 1) as Level;
   saveEvaluations(assessor, draft.id, snapshot.criteria.map(item => ({ criteriaId: item.id, verdict: 'Compliant' as const, comment: 'Evidence reviewed' })));
-  proposeRatings(assessor, draft.id, snapshot.skills.map((skill, index) => ({ skillId: skill.id, level: proposed(index) })));
+  saveAssessedRatings(assessor, draft.id, snapshot.skills.map((skill, index) => ({ skillId: skill.id, level: rated(index) })));
   if (step.stage === 'assessing') return draft.id;
-  submitToVerification(assessor, draft.id, { recommended: step.stage === 'rejected' ? 'Fail' : 'Pass', summary: step.stage === 'rejected' ? 'Controls are not demonstrated' : 'Controls are in place', internalNote: 'Checked against submitted evidence' });
-  if (step.stage === 'verification') return draft.id;
-  at(step.dates[3]);
-  verifyRatings(staff.verifier, draft.id, {
-    decisions: snapshot.skills.map((skill, index) => {
-      const adjust = index === 0 && proposed(0) < 3;
-      return { skillId: skill.id, verifiedLevel: (adjust ? proposed(0) + 1 : proposed(index)) as Level, comment: adjust ? 'Evidence supports a higher level' : undefined };
-    }),
-    comments: 'Ratings reviewed against evidence',
-  });
+  submitAssessment(assessor, draft.id, { recommended: step.stage === 'rejected' ? 'Fail' : 'Pass', summary: step.stage === 'rejected' ? 'Controls are not demonstrated' : 'Controls are in place', internalNote: 'Checked against submitted evidence' });
   if (step.stage === 'approval') return draft.id;
-  at(step.dates[4]);
+  at(step.dates[3]);
   if (step.stage === 'rejected') decide(approver, draft.id, { decision: 'Reject', reason: 'Critical food safety controls are not demonstrated' });
   else {
-    decide(approver, draft.id, { decision: 'Approve', reason: 'Meets the qualification criteria', effectiveDate: step.dates[4] });
+    decide(approver, draft.id, { decision: 'Approve', reason: 'Meets the qualification criteria', effectiveDate: step.dates[3] });
     if (step.publish !== false) publishToQsl(approver, draft.id);
   }
   return draft.id;
@@ -124,25 +130,25 @@ function seedDemoData(): void {
   resetStore();
   seedMasterData();
   const approved = (supplierId: string, dates: Step['dates'], extra: Partial<Step> = {}) => runRound({ supplierId, stage: 'approved', dates, ...extra });
-  const primeRaw = approved('SUP-0067', ['2026-02-20', '2026-02-25', '2026-03-05', '2026-03-10', '2026-03-15']);
-  approved('SUP-0103', ['2025-11-10', '2025-11-15', '2025-12-01', '2025-12-05', '2025-12-10'], { assessor: 'assessor2', approver: 'approver2' });
-  const globalFood = approved('SUP-0051', ['2025-08-01', '2025-08-10', '2025-08-25', '2025-08-30', '2025-09-02']);
-  runRound({ supplierId: 'SUP-0118', stage: 'rejected', dates: ['2026-08-10', '2026-08-18', '2026-08-28', '2026-09-01', '2026-09-03'] });
-  const apexIngredient = approved('SUP-0034', ['2025-10-01', '2025-10-10', '2025-10-20', '2025-10-27', '2025-11-01']);
-  const titan = approved('SUP-0012', ['2025-04-01', '2025-04-08', '2025-04-20', '2025-04-27', '2025-05-02'], { assessor: 'assessor2', approver: 'approver2' });
-  const apexRaw = approved('SUP-0034', ['2026-05-10', '2026-05-15', '2026-05-22', '2026-05-27', '2026-06-01'], { category: 'Raw material', scope: ['Product line', 'Control boards'] });
+  const primeRaw = approved('SUP-0067', ['2026-02-20', '2026-02-25', '2026-03-05', '2026-03-15']);
+  approved('SUP-0103', ['2025-11-10', '2025-11-15', '2025-12-01', '2025-12-10'], { assessor: 'assessor2', approver: 'approver2' });
+  const globalFood = approved('SUP-0051', ['2025-08-01', '2025-08-10', '2025-08-25', '2025-09-02']);
+  runRound({ supplierId: 'SUP-0118', stage: 'rejected', dates: ['2026-08-10', '2026-08-18', '2026-08-28', '2026-09-03'] });
+  const apexIngredient = approved('SUP-0034', ['2025-10-01', '2025-10-10', '2025-10-20', '2025-11-01']);
+  const titan = approved('SUP-0012', ['2025-04-01', '2025-04-08', '2025-04-20', '2025-05-02'], { assessor: 'assessor2', approver: 'approver2' });
+  const apexRaw = approved('SUP-0034', ['2026-05-10', '2026-05-15', '2026-05-22', '2026-06-01'], { category: 'Raw material', scope: ['Product line', 'Control boards'] });
   // Approved but not yet published: shows as Eligible on the QSL.
-  approved('SUP-0103', ['2026-09-20', '2026-09-24', '2026-10-02', '2026-10-08', '2026-10-12'], { category: 'Ingredient', publish: false, assessor: 'assessor2', approver: 'approver2' });
+  approved('SUP-0103', ['2026-09-20', '2026-09-24', '2026-10-02', '2026-10-12'], { category: 'Ingredient', publish: false, assessor: 'assessor2', approver: 'approver2' });
 
   // In-flight rounds, one per stage of the flow.
-  runRound({ supplierId: 'SUP-0012', stage: 'approval', reassess: titan, dates: ['2026-10-01', '2026-10-05', '2026-10-12', '2026-10-16', ''], reason: 'Annual requalification cycle', assessor: 'assessor2', approver: 'approver' });
-  runRound({ supplierId: 'SUP-0051', stage: 'draft', reassess: globalFood, dates: ['2026-10-18', '', '', '', ''], reason: 'Qualification result expired' });
-  runRound({ supplierId: 'SUP-0089', stage: 'submitted', dates: ['2026-10-01', '', '', '', ''], due: '2026-10-20', reason: 'New supplier onboarding' });
-  runRound({ supplierId: 'SUP-0103', category: 'Raw material', stage: 'prereview', dates: ['2026-10-20', '2026-10-24', '', '', ''], reason: 'Extension to raw material supply' });
-  runRound({ supplierId: 'SUP-0034', category: 'Food', stage: 'assessing', dates: ['2026-10-14', '2026-10-18', '2026-10-22', '', ''], reason: 'Extension to food products' });
-  runRound({ supplierId: 'SUP-0067', category: 'Food', stage: 'assessing', dates: ['2026-10-05', '2026-10-08', '2026-10-15', '', ''], reason: 'Extension to food products' });
-  runRound({ supplierId: 'SUP-0118', category: 'Raw material', stage: 'infoRequested', dates: ['2026-10-06', '2026-10-09', '2026-10-14', '', ''], reason: 'Extension to raw material supply' });
-  runRound({ supplierId: 'SUP-0051', category: 'Ingredient', stage: 'verification', dates: ['2026-10-02', '2026-10-06', '2026-10-13', '', ''], reason: 'Extension to ingredients' });
+  runRound({ supplierId: 'SUP-0012', stage: 'approval', reassess: titan, dates: ['2026-10-01', '2026-10-05', '2026-10-12', ''], reason: 'Annual requalification cycle', assessor: 'assessor2', approver: 'approver' });
+  runRound({ supplierId: 'SUP-0051', stage: 'draft', reassess: globalFood, dates: ['2026-10-18', '', '', ''], reason: 'Qualification result expired' });
+  runRound({ supplierId: 'SUP-0089', stage: 'submitted', dates: ['2026-10-01', '', '', ''], due: '2026-10-20', reason: 'New supplier onboarding' });
+  runRound({ supplierId: 'SUP-0103', category: 'Raw material', stage: 'prereview', dates: ['2026-10-20', '2026-10-24', '', ''], reason: 'Extension to raw material supply' });
+  runRound({ supplierId: 'SUP-0034', category: 'Food', stage: 'assessing', dates: ['2026-10-14', '2026-10-18', '2026-10-22', ''], reason: 'Extension to food products' });
+  runRound({ supplierId: 'SUP-0067', category: 'Food', stage: 'assessing', dates: ['2026-10-05', '2026-10-08', '2026-10-15', ''], reason: 'Extension to food products' });
+  runRound({ supplierId: 'SUP-0118', category: 'Raw material', stage: 'infoRequested', dates: ['2026-10-06', '2026-10-09', '2026-10-14', ''], reason: 'Extension to raw material supply' });
+  runRound({ supplierId: 'SUP-0051', category: 'Ingredient', stage: 'approval', dates: ['2026-10-02', '2026-10-06', '2026-10-13', ''], reason: 'Extension to ingredients' });
 
   at('2026-10-10');
   suspendQualification(staff.approver, apexRaw, 'Open CAR on a quality defect');

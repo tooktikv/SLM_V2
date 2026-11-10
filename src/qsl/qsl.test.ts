@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  QslError, activateForm, addCriteriaToForm, assignScope, attachEvidence, checkEligibility, completePreReview, createCriteria, createDraft, decide, deleteCriteria, extendValidity, findQsl, getMiniDashboard, getDetail,
-  getQslSummary, getSheet, getSnapshot, getStore, listCapabilities, listCriteriaRows, listDirectory, listEligibility, listHistory, listManagement, listMonitoring, listQslActivity, prefillReassessment, proposeRatings,
-  publishToQsl, qslReport, qslSections, qualificationSections, reactivateQualification, recordSample, requestMoreInfo, resetStore, saveAnswers, saveEvaluations, saveSelfRatings, seedMasterData, setClock, staff, submitAnswers,
-  submitRequest, submitToVerification, supplierActor, suspendQualification, updateCriteria, updateForm, updateSettings, validateForSubmit, verifyRatings, withdrawFromQsl,
+  QslError, activateForm, addCriteriaToForm, assignScope, attachEvidence, checkEligibility, completePreReview, createCriteria, createDraft, decide, deleteCriteria, extendValidity, findQsl, getDetail,
+  getQslSummary, getSheet, getSnapshot, getStore, listCapabilities, listCriteriaRows, listDirectory, listEligibility, listHistory, listManagement, listMonitoring, listQslActivity, prefillReassessment, saveAssessedRatings,
+  publishToQsl, qslReport, qualificationSections, reactivateQualification, recordSample, requestMoreInfo, resetStore, saveAnswers, saveEvaluations, saveSelfRatings, seedMasterData, setClock, staff, submitAnswers,
+  submitRequest, submitAssessment, supplierActor, suspendQualification, updateCriteria, updateForm, updateSettings, validateForSubmit, withdrawFromQsl,
 } from './index.ts';
 import type { Actor, Level, QslErrorCode } from './index.ts';
 
@@ -14,7 +14,7 @@ const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOS
 const rejects = (code: QslErrorCode, fn: () => unknown) =>
   assert.throws(fn, (error: unknown) => error instanceof QslError && error.code === code, `expected ${code}`);
 
-const { coordinator, assessor, assessor2, verifier, approver, approver2, buyer, admin } = staff;
+const { coordinator, assessor, assessor2, approver, approver2, buyer, admin } = staff;
 const SUPPLIER = 'SUP-0067'; // default category: Raw material
 const supplier = supplierActor(SUPPLIER);
 
@@ -46,22 +46,18 @@ function supplierSubmits(id: string, who: Actor = supplier) {
 
 const proceed = (id: string) => completePreReview(coordinator, id, { infoChecked: true, documentsChecked: true, decision: 'Proceed', comment: '' });
 
-function assessed(id: string, proposedLevel: Level = 2) {
+function assessed(id: string, level: Level = 2) {
   const snapshot = getSnapshot(findQsl(id));
   saveEvaluations(assessor, id, snapshot.criteria.map(item => ({ criteriaId: item.id, verdict: 'Compliant' as const, comment: 'ok' })));
-  proposeRatings(assessor, id, snapshot.skills.map(skill => ({ skillId: skill.id, level: proposedLevel })));
-  submitToVerification(assessor, id, { recommended: 'Pass', summary: 'Summary', internalNote: 'Internal only' });
+  saveAssessedRatings(assessor, id, snapshot.skills.map(skill => ({ skillId: skill.id, level })));
+  submitAssessment(assessor, id, { recommended: 'Pass', summary: 'Summary', internalNote: 'Internal only' });
 }
-
-const verified = (id: string, level: Level = 2, comment?: string) =>
-  verifyRatings(verifier, id, { decisions: getSnapshot(findQsl(id)).skills.map(skill => ({ skillId: skill.id, verifiedLevel: level, comment })), comments: 'Reviewed' });
 
 function approved(effectiveDate = today(), publish = true) {
   const id = submitted();
   supplierSubmits(id);
   proceed(id);
   assessed(id);
-  verified(id);
   decide(approver, id, { decision: 'Approve', reason: 'Meets criteria', effectiveDate });
   if (publish) publishToQsl(approver, id);
   return id;
@@ -136,31 +132,25 @@ describe('Pre-Qualification Review and Sample Evaluation', () => {
   });
 });
 
-describe('Qualification Assessment, Skill Rating and Central Verification', () => {
-  it('keeps self, proposed and verified ratings separate and requires the verifier to confirm or adjust', () => {
+describe('Qualification Assessment and Skill Rating', () => {
+  it('assesses criteria and skill ratings in one step, keeps the self-rating separate and goes straight to approval', () => {
     const id = submitted();
     supplierSubmits(id);
     proceed(id);
     const snapshot = getSnapshot(findQsl(id));
     rejects('FORBIDDEN', () => saveEvaluations(assessor2, id, []));
-    rejects('VALIDATION', () => submitToVerification(assessor, id, { recommended: 'Pass', summary: 'x' }));
+    rejects('VALIDATION', () => submitAssessment(assessor, id, { recommended: 'Pass', summary: 'x' }));
     saveEvaluations(assessor, id, snapshot.criteria.map(item => ({ criteriaId: item.id, verdict: 'Compliant' as const })));
-    rejects('VALIDATION', () => submitToVerification(assessor, id, { recommended: 'Pass', summary: 'x' }));
-    rejects('VALIDATION', () => proposeRatings(assessor, id, [{ skillId: snapshot.skills[0].id, level: 5 as Level }]));
-    proposeRatings(assessor, id, snapshot.skills.map(skill => ({ skillId: skill.id, level: 2 as Level })));
-    submitToVerification(assessor, id, { recommended: 'Pass', summary: 'Good' });
-    assert.equal(findQsl(id).status, 'WaitingVerification');
-    rejects('FORBIDDEN', () => verifyRatings(assessor, id, { decisions: [] }));
-    rejects('FORBIDDEN', () => decide(approver, id, { decision: 'Approve', reason: 'x' }));
-    rejects('VALIDATION', () => verifyRatings(verifier, id, { decisions: [] }));
-    rejects('VALIDATION', () => verified(id, 3));
-    verified(id, 3, 'Evidence supports level 3');
+    rejects('VALIDATION', () => submitAssessment(assessor, id, { recommended: 'Pass', summary: 'x' }));
+    rejects('VALIDATION', () => saveAssessedRatings(assessor, id, [{ skillId: snapshot.skills[0].id, level: 5 as Level }]));
+    saveAssessedRatings(assessor, id, snapshot.skills.map(skill => ({ skillId: skill.id, level: 2 as Level })));
+    rejects('VALIDATION', () => submitAssessment(assessor, id, { recommended: 'Pass', summary: ' ' }));
+    submitAssessment(assessor, id, { recommended: 'Pass', summary: 'Good' });
     const qsl = findQsl(id);
-    const decision = qsl.verifications[0].decisions[0];
-    assert.deepEqual([decision.selfRating, decision.proposedRating, decision.verifiedLevel, decision.action], [3, 2, 3, 'Adjusted']);
-    assert.equal(qsl.selfRatings[0].level, 3);
-    assert.equal(qsl.proposedRatings[0].level, 2, 'proposal is unchanged by verification');
     assert.equal(qsl.status, 'WaitingApproval');
+    assert.equal(qsl.selfRatings[0].level, 3);
+    assert.equal(qsl.assessedRatings[0].level, 2, 'the assessor rating differs from the supplier self-rating');
+    rejects('FORBIDDEN', () => decide(coordinator, id, { decision: 'Approve', reason: 'x' }));
   });
 
   it('returns requests for information to the supplier and back to the assessor', () => {
@@ -205,7 +195,6 @@ describe('Qualification Approval and QSL publishing', () => {
     supplierSubmits(id);
     proceed(id);
     assessed(id);
-    verified(id);
     assert.deepEqual(listManagement(approver, 'approval').rows.map(row => row.nextAction), ['approve']);
     assert.deepEqual(listManagement(approver2, 'approval').rows, []);
     rejects('FORBIDDEN', () => decide(approver2, id, { decision: 'Approve', reason: 'x' }));
@@ -214,22 +203,19 @@ describe('Qualification Approval and QSL publishing', () => {
     decide(approver, id, { decision: 'Return', reason: 'Re-check traceability' });
     assert.equal(findQsl(id).status, 'WaitingAssessment');
     assert.equal(findQsl(id).recommended, undefined);
-    submitToVerificationAgain(id);
     rejects('INVALID_TRANSITION', () => decide(approver, id, { decision: 'Approve', reason: 'x' }));
-    verified(id);
+    submitAssessment(assessor, id, { recommended: 'Pass', summary: 'Rechecked' });
     decide(approver, id, { decision: 'Reject', reason: 'Not acceptable' });
     assert.equal(findQsl(id).result, 'Fail');
     assert.deepEqual(findQsl(id).approvals.map(item => item.decision), ['Return', 'Reject']);
     assert.equal(listDirectory(admin).rows.length, 0, 'rejected suppliers are not enrolled');
-    assert.equal(findQsl(id).verifications.length, 2, 'earlier verification is kept');
   });
 
-  it('refuses to approve without verification and validates scope and validity', () => {
+  it('validates scope and validity when approving', () => {
     const id = submitted();
     supplierSubmits(id);
     proceed(id);
     assessed(id);
-    verified(id);
     rejects('VALIDATION', () => decide(approver, id, { decision: 'Approve', reason: 'ok', scopeType: 'Site / plant', scopeDetail: '' }));
     rejects('VALIDATION', () => decide(approver, id, { decision: 'Approve', reason: 'ok', validityMonths: 99 }));
     const done = decide(approver, id, { decision: 'Approve', reason: 'ok', scopeType: 'Company-wide', scopeDetail: '', validityMonths: 24 });
@@ -265,7 +251,7 @@ describe('Qualification Approval and QSL publishing', () => {
     assert.equal(row.checks.validity, false);
     rejects('VALIDATION', () => publishToQsl(approver, expired));
     const open = submitted({ supplierId: 'SUP-0103', formId: formFor('Food') });
-    assert.deepEqual(listEligibility(admin).pending.map(item => [item.id, item.waitingFor]), [[open, 'Qualification']]);
+    assert.deepEqual(listEligibility(admin).pending.map(item => item.id), [open]);
   });
 
   it('builds QSL reports and the capability register from approved ratings', () => {
@@ -276,7 +262,7 @@ describe('Qualification Approval and QSL publishing', () => {
     const capability = listCapabilities(admin).rows[0];
     assert.equal(capability.id, id);
     assert.equal(capability.status, 'Approved');
-    assert.deepEqual(capability.skills.map(skill => skill.verified), [2, 2, 2]);
+    assert.deepEqual(capability.skills.map(skill => skill.assessed), [2, 2, 2]);
     rejects('FORBIDDEN', () => listCapabilities(supplier));
   });
 
@@ -307,7 +293,6 @@ describe('Monitoring and Requalification', () => {
   it('raises expiry alerts and extends validity with a reason', () => {
     const id = approved(inDays(-340));
     assert.equal(listMonitoring(admin).due.length, 1);
-    assert.equal(getMiniDashboard(admin).counts.expiring, 1);
     rejects('VALIDATION', () => extendValidity(approver, id, { newExpiry: inDays(-10), reason: 'x' }));
     rejects('VALIDATION', () => extendValidity(approver, id, { newExpiry: inDays(100), reason: '' }));
     rejects('FORBIDDEN', () => extendValidity(coordinator, id, { newExpiry: inDays(100), reason: 'x' }));
@@ -366,7 +351,6 @@ describe('Visibility, roles and history', () => {
     assert.equal(ids(assessor2).length, 0);
     assert.ok(!ids(approver).includes(open));
     assert.deepEqual(qualificationSections('Supplier'), ['pending', 'qualified']);
-    assert.deepEqual(qslSections('Supplier'), []);
     assert.ok(qualificationSections('Admin').includes('requalification') && !qualificationSections('Assessor').includes('requalification'));
     rejects('FORBIDDEN', () => getDetail(buyer, open));
     rejects('FORBIDDEN', () => getDetail(supplierActor('SUP-0034'), done));
@@ -378,7 +362,7 @@ describe('Visibility, roles and history', () => {
     assert.equal(getDetail(supplier, id).criteriaResults.length, 0);
     assert.equal(getDetail(supplier, id).approvals.length, 0);
     assert.equal(getSheet(supplier, id).sections.flatMap(section => section.items).every(item => item.evaluation === undefined), true);
-    assert.equal(getSheet(supplier, id).skills.every(skill => skill.proposed === undefined && skill.verified === undefined), true);
+    assert.equal(getSheet(supplier, id).skills.every(skill => skill.assessed === undefined), true);
   });
 
   it('records qualification, approval and status history', () => {
@@ -389,7 +373,3 @@ describe('Visibility, roles and history', () => {
     assert.equal(getStore().audit.some(entry => entry.action === 'QSL request submitted'), true);
   });
 });
-
-function submitToVerificationAgain(id: string) {
-  submitToVerification(assessor, id, { recommended: 'Pass', summary: 'Rechecked' });
-}

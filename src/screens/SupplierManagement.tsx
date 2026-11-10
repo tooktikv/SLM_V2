@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Header from '../components/Header';
 import StatusBadge from '../components/StatusBadge';
 import ExportButton from '../components/ExportButton';
+import { CheckIcon } from '../components/icons';
 import { Supplier, suppliers } from '../data/suppliers';
 import { getSourcing, sourcingStages } from '../sourcing';
 import { useSourcingRevision } from '../sourcing/useSourcing';
@@ -174,9 +175,9 @@ function DirectoryTab({ onOpenSupplier }: { onOpenSupplier: (supplier: Supplier,
                       <div className="flex items-center gap-2 whitespace-nowrap">
                         <Button variant="link" onClick={() => onOpenSupplier(s)}>View profile</Button>
                         <span aria-hidden="true" className="text-line">|</span>
-                        <Button variant="link-muted" onClick={() => onOpenSupplier(s, 'Profile')}>Edit</Button>
-                        <span aria-hidden="true" className="text-line">|</span>
-                        <Button variant="link-muted" onClick={() => setManaging(s)}>{getSourcing(s.id) ? 'Manage sourcing' : 'Mark interested'}</Button>
+                        {getSourcing(s.id)
+                          ? <span className="inline-flex items-center gap-1 text-caption font-medium text-success-700"><CheckIcon className="h-3.5 w-3.5" />Added to sourcing</span>
+                          : <Button variant="link-muted" onClick={() => setManaging(s)}>Add to sourcing</Button>}
                       </div>
                     </Td>
                   </Tr>
@@ -193,7 +194,7 @@ function DirectoryTab({ onOpenSupplier }: { onOpenSupplier: (supplier: Supplier,
           )}
           {/* Pagination */}
           <Pagination
-            summary={<>Showing {filtered.length ? (page - 1) * pageSize + 1 : 0}–{Math.min(page * pageSize, filtered.length)} of {filtered.length} suppliers</>}
+            summary={`Showing ${filtered.length ? (page - 1) * pageSize + 1 : 0}–${Math.min(page * pageSize, filtered.length)} of ${filtered.length} suppliers`}
             page={page}
             pageCount={pageCount}
             onPrevious={() => setPage(current => Math.max(1, current - 1))}

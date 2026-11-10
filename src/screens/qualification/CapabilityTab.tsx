@@ -8,7 +8,7 @@ import { capabilityProfiles } from '../../data/capability';
 import { BackLink, Badge, Button, Card, CardBody, CardHeader, DetailGrid, EmptyState, Grid, HeadRow, SearchInput, Select, Table, TableContainer, Td, Toolbar, Tr } from '../../components/ui';
 import { CapabilityBadge, LevelBadge, formatDate } from './shared';
 
-function CapabilityDetail({ actor, row, onBack, onOpen, onProfile, onAssignTask }: { actor: Actor; row: CapabilityRow; onBack: () => void; onOpen: (id: string) => void; onProfile: (supplierId: string, tab?: string) => void; onAssignTask?: (supplierId: string) => void }) {
+function CapabilityDetail({ actor, row, onBack, onOpen, onProfile }: { actor: Actor; row: CapabilityRow; onBack: () => void; onOpen: (id: string) => void; onProfile: (supplierId: string, tab?: string) => void }) {
   const history = useQslQuery(() => getCapabilityHistory(actor, row.id), [actor.id, row.id]).data ?? [];
   const profile = capabilityProfiles[row.supplierId];
   const approved = row.status === 'Approved';
@@ -27,14 +27,13 @@ function CapabilityDetail({ actor, row, onBack, onOpen, onProfile, onAssignTask 
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => onOpen(row.id)}>Open qualification result</Button>
             <Button onClick={() => onProfile(row.supplierId, 'Capabilities')}>Open supplier profile</Button>
-            {onAssignTask && <Button variant="primary" onClick={() => onAssignTask(row.supplierId)}>Assign task</Button>}
           </div>
         </div>
       </Card>
 
       <Grid cols={2}>
         <Card>
-          <CardHeader title="Capability profile" description="Declared by the supplier; verified at Central Authority review" />
+          <CardHeader title="Capability profile" description="Declared by the supplier and assessed by the buyer" />
           {profile ? (
             <CardBody className="space-y-5">
               <DetailGrid items={[
@@ -54,13 +53,12 @@ function CapabilityDetail({ actor, row, onBack, onOpen, onProfile, onAssignTask 
 
         <div className="space-y-4">
           <Card className="overflow-hidden">
-            <CardHeader title="Skill rating" description="Supplier self-rating, assessor proposal and Central Authority verification are stored separately" />
+            <CardHeader title="Skill rating" description="The supplier self-rating and the assessor rating are stored separately" />
             <TableContainer>
               <Table minWidth={520}>
-                <HeadRow columns={['Skill category', 'Supplier self', 'Proposed', 'Verified', 'Verification']} />
+                <HeadRow columns={['Skill category', 'Supplier self', 'Assessed']} />
                 <tbody>{row.skills.map(skill => (
-                  <Tr key={skill.skillId}><Td dense>{skill.name}</Td><Td dense><LevelBadge level={skill.self} /></Td><Td dense><LevelBadge level={skill.proposed} /></Td><Td dense><LevelBadge level={skill.verified} /></Td>
-                    <Td dense>{skill.action ? <Badge small tone={skill.action === 'Adjusted' ? 'warning' : 'success'}>{skill.action}</Badge> : <span className="text-ink-muted">Pending</span>}</Td></Tr>
+                  <Tr key={skill.skillId}><Td dense>{skill.name}</Td><Td dense><LevelBadge level={skill.self} /></Td><Td dense><LevelBadge level={skill.assessed} /></Td></Tr>
                 ))}</tbody>
               </Table>
             </TableContainer>
@@ -77,29 +75,29 @@ function CapabilityDetail({ actor, row, onBack, onOpen, onProfile, onAssignTask 
 
       <Grid cols={2}>
         <Card>
-          <CardHeader title="Review & approval" description="Central Authority verifies the rating; the Buyer approves the capability" />
+          <CardHeader title="Review & approval" description="The Assessor rates the skills; the Buyer approves the capability" />
           <ol className="space-y-3 p-5 text-body">
-            <li className="flex items-start justify-between gap-3"><div><div className="font-medium text-ink">Central Authority review</div><div className="text-caption text-ink-muted">{row.centralReview ? `${row.centralReview.by} · ${formatDate(row.centralReview.at)} · ${row.centralReview.adjusted} rating(s) adjusted` : 'Not reviewed yet'}</div></div><Badge small tone={row.centralReview ? 'success' : 'neutral'}>{row.centralReview ? 'Verified' : 'Pending'}</Badge></li>
+            <li className="flex items-start justify-between gap-3"><div><div className="font-medium text-ink">Assessment</div><div className="text-caption text-ink-muted">{row.assessment ? `${row.assessment.by} · ${formatDate(row.assessment.at)}` : 'Not assessed yet'}</div></div><Badge small tone={row.assessment ? 'success' : 'neutral'}>{row.assessment ? 'Assessed' : 'Pending'}</Badge></li>
             <li className="flex items-start justify-between gap-3"><div><div className="font-medium text-ink">Buyer approval</div><div className="text-caption text-ink-muted">{row.buyerApproval ? `${row.buyerApproval.by} · ${formatDate(row.buyerApproval.at)}` : 'Not decided yet'}</div></div><Badge small tone={row.buyerApproval?.decision === 'Approve' ? 'success' : row.buyerApproval ? 'danger' : 'neutral'}>{row.buyerApproval ? (row.buyerApproval.decision === 'Approve' ? 'Approved' : row.buyerApproval.decision) : 'Pending'}</Badge></li>
           </ol>
         </Card>
         <Card className="overflow-hidden">
-          <CardHeader title="Capability history" description="Verified ratings per round and the change from the previous round" />
+          <CardHeader title="Capability history" description="Assessed ratings per round and the change from the previous round" />
           <TableContainer>
             <Table minWidth={520}>
-              <HeadRow columns={['Round', 'Verified', 'Skill ratings']} />
+              <HeadRow columns={['Round', 'Assessed', 'Skill ratings']} />
               <tbody>{history.map(entry => (
                 <Tr key={entry.id}>
                   <Td dense><div className="font-medium text-ink">Round {entry.round}</div><div className="font-mono text-caption text-ink-muted">{entry.qslNo}</div></Td>
                   <Td dense>{formatDate(entry.at)}</Td>
                   <Td dense><div className="flex flex-wrap gap-1">{entry.skills.map(skill => (
-                    <Badge key={skill.skillId} small tone={skill.change > 0 ? 'success' : skill.change < 0 ? 'warning' : 'neutral'}>{skill.name} · {skill.verified ?? '—'}{skill.change > 0 ? ' ▲' : skill.change < 0 ? ' ▼' : ''}</Badge>
+                    <Badge key={skill.skillId} small tone={skill.change > 0 ? 'success' : skill.change < 0 ? 'warning' : 'neutral'}>{skill.name} · {skill.assessed ?? '—'}{skill.change > 0 ? ' ▲' : skill.change < 0 ? ' ▼' : ''}</Badge>
                   ))}</div></Td>
                 </Tr>
               ))}</tbody>
             </Table>
           </TableContainer>
-          {history.length === 0 && <EmptyState title="No verified ratings yet" />}
+          {history.length === 0 && <EmptyState title="No assessed ratings yet" />}
         </Card>
       </Grid>
     </div>
@@ -107,7 +105,7 @@ function CapabilityDetail({ actor, row, onBack, onOpen, onProfile, onAssignTask 
 }
 
 // Qualified list: approved qualification and capability of each supplier by category and scope, in one place.
-export function CapabilityTab({ actor, onOpen, onProfile, onAssignTask, actions }: { actor: Actor; onOpen: (id: string) => void; onProfile: (supplierId: string, tab?: string) => void; onAssignTask?: (supplierId: string) => void; actions?: ReactNode }) {
+export function CapabilityTab({ actor, onOpen, onProfile, actions }: { actor: Actor; onOpen: (id: string) => void; onProfile: (supplierId: string, tab?: string) => void; actions?: ReactNode }) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -115,26 +113,26 @@ export function CapabilityTab({ actor, onOpen, onProfile, onAssignTask, actions 
   const rows = query.data?.rows ?? [];
   const detail = detailId ? rows.find(row => row.id === detailId) : undefined;
 
-  if (detail) return <CapabilityDetail actor={actor} row={detail} onBack={() => setDetailId(null)} onOpen={onOpen} onProfile={onProfile} onAssignTask={onAssignTask} />;
+  if (detail) return <CapabilityDetail actor={actor} row={detail} onBack={() => setDetailId(null)} onOpen={onOpen} onProfile={onProfile} />;
 
   return (
     <div className="space-y-4">
-      <Toolbar title="Qualified suppliers" description={`${rows.length} records`} actions={<><ExportButton filename="slm-qualified-suppliers" columns={['Supplier ID', 'Supplier', 'Category', 'Scope', 'Round', 'Status', 'Verified skill rating', 'Valid from', 'Valid until']} rows={rows.map(row => [row.supplierId, row.supplierName, row.category, row.scope, row.round, row.status, row.skills.map(skill => `${skill.name}: ${skill.verified ?? '-'}`).join('; '), row.validFrom, row.validUntil])} />{actions}</>}>
+      <Toolbar title="Qualified suppliers" description={`${rows.length} records`} actions={<><ExportButton filename="slm-qualified-suppliers" columns={['Supplier ID', 'Supplier', 'Category', 'Scope', 'Round', 'Status', 'Assessed skill rating', 'Valid from', 'Valid until']} rows={rows.map(row => [row.supplierId, row.supplierName, row.category, row.scope, row.round, row.status, row.skills.map(skill => `${skill.name}: ${skill.assessed ?? '-'}`).join('; '), row.validFrom, row.validUntil])} />{actions}</>}>
         <SearchInput placeholder="Search supplier, category, skill" value={search} onChange={event => setSearch(event.target.value)} aria-label="Search capabilities" />
         <Select aria-label="Product category" value={category} onChange={event => setCategory(event.target.value)}><option value="">All categories</option>{categoriesFor().map(item => <option key={item}>{item}</option>)}</Select>
       </Toolbar>
       <Card className="overflow-hidden">
         <TableContainer>
           <Table minWidth={960}>
-            <HeadRow columns={['Supplier', 'Category / Scope', 'Verified skill rating', 'Status', 'Valid from - until', '']} />
+            <HeadRow columns={['Supplier', 'Category / Scope', 'Assessed skill rating', 'Status', 'Valid from - until', '']} />
             <tbody>{rows.map(row => (
               <Tr key={row.id}>
                 <Td><div className="font-medium text-ink">{row.supplierName}</div><div className="text-caption text-ink-muted">{row.supplierId} · Round {row.round}</div></Td>
                 <Td>{row.category}<div className="text-caption text-ink-muted">{row.scope}</div></Td>
-                <Td><div className="flex flex-wrap gap-1">{row.skills.map(skill => <Badge key={skill.skillId} small tone={skill.verified ? 'brand' : 'neutral'}>{skill.name} · {skill.verified ?? '—'}</Badge>)}{row.skills.length === 0 && <span className="text-ink-muted">—</span>}</div></Td>
+                <Td><div className="flex flex-wrap gap-1">{row.skills.map(skill => <Badge key={skill.skillId} small tone={skill.assessed ? 'brand' : 'neutral'}>{skill.name} · {skill.assessed ?? '—'}</Badge>)}{row.skills.length === 0 && <span className="text-ink-muted">—</span>}</div></Td>
                 <Td><CapabilityBadge status={row.status} /></Td>
-                <Td>{row.validFrom ? `${formatDate(row.validFrom)} - ${formatDate(row.validUntil)}` : '—'}{row.daysLeft !== undefined && row.daysLeft >= 0 && row.daysLeft <= 60 && <div className="text-caption text-warning-700">{row.daysLeft} days left</div>}</Td>
-                <Td><div className="flex gap-1.5"><Button size="xs" variant="link" onClick={() => setDetailId(row.id)}>Capability details</Button>{onAssignTask && <Button size="xs" variant="link-muted" onClick={() => onAssignTask(row.supplierId)}>Assign task</Button>}</div></Td>
+                <Td>{row.validFrom ? `${formatDate(row.validFrom)} - ${formatDate(row.validUntil)}` : '—'}{row.daysLeft !== undefined && row.daysLeft >= 0 && row.daysLeft <= 60 && <div className="text-caption text-warning-700">{`${row.daysLeft} days left`}</div>}</Td>
+                <Td><div className="flex gap-1.5"><Button size="xs" variant="link" onClick={() => setDetailId(row.id)}>Capability details</Button></div></Td>
               </Tr>
             ))}</tbody>
           </Table>

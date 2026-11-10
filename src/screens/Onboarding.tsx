@@ -135,7 +135,7 @@ export default function Onboarding() {
               <CardHeader
                 title="Document verification status"
                 description={`Verification results are provided by ${selected.source}. SLM displays the latest API data.`}
-                actions={<span className="text-caption text-ink-muted">{verified} of {requiredDocuments.length} required verified</span>}
+                actions={<span className="text-caption text-ink-muted">{`${verified} of ${requiredDocuments.length} required verified`}</span>}
               />
               <TableContainer>
                 <Table minWidth={640}>
@@ -225,7 +225,6 @@ export default function Onboarding() {
                   <option>All stages</option>
                   {stepNames.slice(0, -1).map(step => <option key={step}>{step}</option>)}
                 </Select>
-                <Button size="md">Refresh all API data</Button>
               </Toolbar>
             }
           />

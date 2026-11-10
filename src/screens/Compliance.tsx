@@ -4,18 +4,24 @@ import ComplianceTracker from '../components/ComplianceTracker';
 import { ArrowRightIcon } from '../components/icons';
 import StatusBadge from '../components/StatusBadge';
 import ExportButton from '../components/ExportButton';
-import { complianceCompanies as companies, complianceGroups, daysLabel, needsAttention, type ComplianceCompany } from '../data/compliance';
+import { complianceCompanies as companies, daysLabel, needsAttention, type ComplianceCompany } from '../data/compliance';
 import { isSampleOpen, sampleRequests } from '../data/samples';
+import { useRenewals } from '../data/renewals';
 import { suppliers } from '../data/suppliers';
 import { useNavigation } from '../NavigationContext';
-import { DocumentRegister, FindingsHistory } from './compliance/ComplianceSections';
-import { BackLink, Badge, Button, Callout, Card, CardBody, CardHeader, CellStack, EmptyState, Grid, HeadRow, KpiCard, KpiGrid, Page, PageContent, SearchInput, Select, Table, TableContainer, Td, Toolbar, Tr, cx, type Tone } from '../components/ui';
+import { DocumentRenewal } from './compliance/DocumentRenewal';
+import { BackLink, Button, Card, CardHeader, CellStack, EmptyState, HeadRow, KpiCard, KpiGrid, Page, PageContent, SearchInput, Select, Table, TableContainer, Tabs, Td, Toolbar, Tr, cx, type Tone } from '../components/ui';
 
 const scoreText = (score: number) => (score >= 85 ? 'text-success-700' : score >= 70 ? 'text-warning-700' : 'text-danger-700');
 
+type Tab = 'overview' | 'renewal';
+
 export default function Compliance() {
   const { navigate, openSupplier, section, focusSupplierId } = useNavigation();
-  const [selected, setSelected] = useState<ComplianceCompany | null>(() => companies.find(company => company.id === focusSupplierId) ?? null);
+  useRenewals();
+  // Deep links choose the starting tab; a supplier link opens its detail on the overview tab.
+  const [tab, setTab] = useState<Tab>(section === 'renewal' ? 'renewal' : 'overview');
+  const [selected, setSelected] = useState<ComplianceCompany | null>(() => (section === 'renewal' ? null : companies.find(company => company.id === focusSupplierId) ?? null));
   const [search, setSearch] = useState('');
   const [attentionFilter, setAttentionFilter] = useState('All attention levels');
   const filtered = companies.filter(company => {
@@ -37,10 +43,11 @@ export default function Compliance() {
   };
 
   if (selected) {
-    const actionDocs = selected.items.filter(needsAttention);
+    const trackedItems = selected.items.filter(item => item.group !== 'Documents');
+    const actionDocs = trackedItems.filter(needsAttention);
     const summary: { label: string; value: string; note: string; tone: Tone; size?: 'md' }[] = [
       { label: 'Compliance score', value: `${selected.compliance}%`, note: 'Portfolio requirements', tone: selected.compliance >= 85 ? 'success' : 'warning' },
-      { label: 'Items tracked', value: `${selected.items.length}`, note: `${new Set(selected.items.map(item => item.group)).size} tracking types · ${(sampleRequests[selected.id] ?? []).length} sample requests`, tone: 'brand' },
+      { label: 'Items tracked', value: `${trackedItems.length}`, note: `${new Set(trackedItems.map(item => item.group)).size} tracking types · ${(sampleRequests[selected.id] ?? []).length} sample requests`, tone: 'brand' },
       { label: 'Follow-up tasks', value: `${actionDocs.length}`, note: 'Missing, overdue or due soon', tone: actionDocs.length ? 'danger' : 'success' },
       { label: 'Last API sync', value: selected.lastSync, note: 'Across verification sources', tone: 'neutral', size: 'md' },
     ];
@@ -54,28 +61,9 @@ export default function Compliance() {
             {summary.map(card => <KpiCard key={card.label} label={card.label} value={card.value} note={card.note} tone={card.tone} size={card.size} />)}
           </KpiGrid>
 
-          <Grid cols="split3">
-            <Card className="xl:col-span-2">
-              <CardHeader title="Follow-up tasks" description="Items that are missing, overdue or due soon" actions={<Button variant="link">Manage cadence</Button>} />
-              <CardBody className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                {actionDocs.map(document => (
-                  <div key={`${document.group}-${document.name}`} className={cx('rounded-control border p-3', document.status === 'Expired' || document.status === 'Missing' ? 'border-danger-200 bg-danger-50' : 'border-warning-200 bg-warning-50')}>
-                    <div className="flex justify-between gap-2"><div className="text-body font-medium text-ink">{document.name}</div><div className={cx('whitespace-nowrap text-caption font-semibold', document.status === 'Expiring' ? 'text-warning-700' : 'text-danger-700')}>{document.status}</div></div>
-                    <div className="mt-1 text-caption text-ink-muted">{document.group} · {daysLabel(document.daysLeft)} · Owner {document.owner}</div>
-                    <div className="mt-2 flex items-center gap-2"><Button variant="link-muted" onClick={() => navigate('car')}>Create follow-up</Button></div>
-                  </div>
-                ))}
-                {actionDocs.length === 0 && <Callout tone="success" className="md:col-span-2">No follow-up action is required.</Callout>}
-              </CardBody>
-            </Card>
-            <Callout tone="info" title="Suggested reminder cadence" className="self-start">
-              <ul className="mt-1 space-y-1.5"><li>90 days — notify procurement owner</li><li>60 days — request supplier renewal</li><li>30 days — escalate to category manager</li><li>Expired — create compliance blocker</li></ul>
-            </Callout>
-          </Grid>
-
           <Card className="overflow-hidden">
             <CardHeader title="Compliance tracker" description="Verification is performed by connected third-party sources; SLM displays the latest status." />
-            <ComplianceTracker companyId={selected.id} />
+            <ComplianceTracker companyId={selected.id} onOpenDocuments={() => navigate('compliance', 'renewal', selected.id)} />
           </Card>
         </PageContent>
       </Page>
@@ -83,9 +71,6 @@ export default function Compliance() {
   }
 
   const allDocuments = companies.flatMap(company => company.items);
-  const allSamples = Object.values(sampleRequests).flat();
-  const openSamples = allSamples.filter(isSampleOpen);
-  const lateSamples = openSamples.filter(sample => sample.daysLeft !== null && sample.daysLeft < 0);
   const overviewCards: { label: string; value: number; note: string; tone: Tone }[] = [
     { label: 'Compliant companies', value: companies.filter(company => company.compliance >= 85).length, note: 'No immediate action', tone: 'success' },
     { label: 'Due in 90 days', value: allDocuments.filter(document => document.daysLeft !== null && document.daysLeft >= 0 && document.daysLeft <= 90).length, note: 'Based on expiry and due dates', tone: 'warning' },
@@ -96,46 +81,14 @@ export default function Compliance() {
 
   return (
     <Page>
-      <Header breadcrumb={['Monitor', 'Compliance & Monitoring']} title={section === 'documents' ? 'Document Register' : section === 'findings' ? 'Findings & History' : 'Supplier Monitoring'} />
+      <Header breadcrumb={['Monitor', 'Compliance & Monitoring']} title="Compliance & Monitoring" />
       <PageContent>
-        {section === 'documents' && <DocumentRegister />}
-        {section === 'findings' && <FindingsHistory />}
-        {section !== 'documents' && section !== 'findings' && (<>
+        <Tabs<Tab> label="Compliance sections" value={tab} onChange={setTab} items={[{ value: 'overview', label: 'Compliance overview' }, { value: 'renewal', label: 'Document renewal' }]} />
+        {tab === 'renewal' && <DocumentRenewal initialSearch={companies.find(company => company.id === focusSupplierId)?.name} />}
+        {tab === 'overview' && (<>
         <KpiGrid cols={5}>
           {overviewCards.map(card => <KpiCard key={card.label} label={card.label} value={card.value} note={card.note} tone={card.tone} />)}
         </KpiGrid>
-
-        <Card>
-          <CardHeader title="What SLM tracks" description="Beyond documents, each obligation has its own trigger, owner and reminder" />
-          <CardBody>
-            <Grid cols={3}>
-              {complianceGroups.map(group => {
-                const groupItems = allDocuments.filter(item => item.group === group.group);
-                const attention = groupItems.filter(needsAttention).length;
-                return (
-                  <div key={group.group} className="rounded-control border border-line p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="text-body font-semibold text-ink">{group.title}</div>
-                      <Badge tone={attention ? 'warning' : 'success'} small>{attention ? `${attention} need attention` : 'On track'}</Badge>
-                    </div>
-                    <p className="mt-1 text-caption text-ink-muted">{group.summary}</p>
-                    <div className="mt-3 flex items-baseline gap-1.5"><span className="text-xl font-semibold tabular-nums text-ink">{groupItems.length}</span><span className="text-caption text-ink-muted">items tracked</span></div>
-                    <div className="mt-2 border-t border-line-subtle pt-2 text-caption text-ink-muted">Trigger: {group.trigger}</div>
-                  </div>
-                );
-              })}
-              <div className="rounded-control border border-line p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-body font-semibold text-ink">Sample requests</div>
-                  <Badge tone={lateSamples.length ? 'danger' : 'success'} small>{lateSamples.length ? `${lateSamples.length} past required date` : 'On track'}</Badge>
-                </div>
-                <p className="mt-1 text-caption text-ink-muted">Product samples requested for approval, testing or cost comparison</p>
-                <div className="mt-3 flex items-baseline gap-1.5"><span className="text-xl font-semibold tabular-nums text-ink">{openSamples.length}</span><span className="text-caption text-ink-muted">open of {allSamples.length} requests</span></div>
-                <div className="mt-2 border-t border-line-subtle pt-2 text-caption text-ink-muted">Trigger: Required-by date · lab result decision</div>
-              </div>
-            </Grid>
-          </CardBody>
-        </Card>
 
         <Card className="overflow-hidden">
           <CardHeader

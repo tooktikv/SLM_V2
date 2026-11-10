@@ -4,7 +4,7 @@ import { MenuIcon } from './components/icons';
 import { useLang } from './i18n';
 import { CarTarget, Screen } from './types';
 import type { Role } from './qsl/types';
-import { modules, resolveSection } from './modules';
+import { modules, resolveSection, sectionsOf } from './modules';
 import Dashboard from './screens/dashboard/DashboardOverview';
 import SupplierManagement from './screens/SupplierManagement';
 import Supplier360 from './screens/Supplier360';
@@ -51,6 +51,7 @@ export default function App() {
     setScreen(next);
     setFocusSupplierId(focusId);
     if (requested) setSections(current => ({ ...current, [next]: requested }));
+    else if (!sectionsOf(next, role).length) setSections(({ [next]: _dropped, ...rest }) => rest);
   };
   const setSection = (requested: string) => setSections(current => ({ ...current, [screen]: requested }));
 
@@ -74,7 +75,7 @@ export default function App() {
       case 'tasks': return <Tasks />;
       case 'qualification': return <Qualification key={section} />;
       case 'qsl': return <Qsl key={section} />;
-      case 'risk': return <RiskManagement key={section} />;
+      case 'risk': return <RiskManagement />;
       case 'performance': return <Performance />;
       case 'audit': return <Audit />;
       case 'car': return <CAR key={focusSupplierId ?? 'all'} />;

@@ -2,9 +2,10 @@ import type { Actor, CertifiedSkillView, Level, ProcessStatus, Qsl, QslResult, S
 import { clone, getStore, supplierCategory, todayIso } from '../store.ts';
 import { assertCan, assertView, canViewQsl } from '../rbac.ts';
 import { addDaysIso, daysBetween } from '../dates.ts';
-import { latestVersion, publishedVersion } from '../versioning.ts';
+import { getVersion, latestVersion, publishedVersion } from '../versioning.ts';
 import { validityMonthsFor } from '../settings.ts';
 import { criteriaUsage } from './criteria.ts';
+import { portalView } from './portal.ts';
 import { findQsl, findSupplier, getSnapshot, isAnswered, isOpen, isSuspended, missingForApproval, missingSupplierInput, userName } from './assessments.ts';
 import { resultLabel, statusLabel, supplierStatusLabel, typeLabel, validityLabel } from '../labels.ts';
 import { suppliers } from '../../data/suppliers.ts';
@@ -12,7 +13,7 @@ import { complianceCompanies } from '../../data/compliance.ts';
 
 export type Validity = keyof typeof validityLabel;
 export type Standing = 'Published' | 'Expiring' | 'Expired' | 'Suspended' | 'Withdrawn';
-export type NextAction = 'fill' | 'prereview' | 'sample' | 'assess' | 'verify' | 'approve' | 'edit' | null;
+export type NextAction = 'prereview' | 'sample' | 'assess' | 'approve' | 'edit' | null;
 
 export const visibleQsls = (actor: Actor) => getStore().qsls.filter(qsl => canViewQsl(actor, qsl));
 // A round is on the QSL once it has been published (enrollment exists); a withdrawn listing keeps its record.
@@ -72,7 +73,6 @@ export function ownerOf(qsl: Qsl): string {
     case 'WaitingSupplier': return findSupplier(qsl.supplierId).name;
     case 'InfoRequested': return qsl.infoReturnTo === 'PreQualReview' || qsl.corrections.some(item => !item.resolvedAt) ? findSupplier(qsl.supplierId).name : userName(qsl.assessorId);
     case 'WaitingAssessment': return userName(qsl.assessorId);
-    case 'WaitingVerification': return 'Central Verifier';
     case 'WaitingApproval': return userName(qsl.approverId);
     default: return '—';
   }
@@ -81,11 +81,9 @@ export function ownerOf(qsl: Qsl): string {
 function nextActionFor(actor: Actor, qsl: Qsl): NextAction {
   switch (qsl.status) {
     case 'Draft': return actor.role === 'Coordinator' || actor.role === 'Admin' ? 'edit' : null;
-    case 'WaitingSupplier': case 'InfoRequested': return actor.role === 'Supplier' || actor.role === 'Admin' ? 'fill' : null;
     case 'PreQualReview': return actor.role === 'Coordinator' || actor.role === 'Admin' ? 'prereview' : null;
     case 'SampleEvaluation': return actor.role === 'Coordinator' || actor.role === 'Admin' ? 'sample' : null;
     case 'WaitingAssessment': return actor.role === 'Admin' || (actor.role === 'Assessor' && qsl.assessorId === actor.id) ? 'assess' : null;
-    case 'WaitingVerification': return actor.role === 'Verifier' || actor.role === 'Admin' ? 'verify' : null;
     case 'WaitingApproval': return actor.role === 'Admin' || (actor.role === 'Approver' && qsl.approverId === actor.id) ? 'approve' : null;
     default: return null;
   }
@@ -144,23 +142,22 @@ const matchesSearch = (row: QslRow, search?: string) => {
   return (search ?? '').toLowerCase().split(/\s+/).filter(Boolean).every(token => text.includes(token));
 };
 
-export type ManagementStage = 'request' | 'sample' | 'assessment' | 'verification' | 'approval';
+export type ManagementStage = 'request' | 'sample' | 'assessment' | 'approval';
 export type ManagementView = 'all' | 'open' | ManagementStage;
 const stageOf = (qsl: Qsl): ManagementStage => {
   switch (qsl.status) {
     case 'SampleEvaluation': return 'sample';
     case 'WaitingAssessment': return 'assessment';
-    case 'WaitingVerification': return 'verification';
     case 'WaitingApproval': return 'approval';
     case 'InfoRequested': return qsl.infoReturnTo === 'WaitingAssessment' ? 'assessment' : 'request';
     default: return 'request';
   }
 };
 
-// One pipeline: request/pre-qualification -> sample -> assessment -> central verification -> approval. 'open' = every round in progress.
+// One pipeline: request/pre-qualification -> sample -> assessment (criteria and skill ratings) -> approval. 'open' = every round in progress.
 export function listManagement(actor: Actor, view: ManagementView, search?: string) {
   const visible = visibleQsls(actor);
-  const counts: Record<ManagementStage, number> = { request: 0, sample: 0, assessment: 0, verification: 0, approval: 0 };
+  const counts: Record<ManagementStage, number> = { request: 0, sample: 0, assessment: 0, approval: 0 };
   const inProgress = visible.filter(qsl => qsl.status !== 'Completed');
   inProgress.forEach(qsl => { counts[stageOf(qsl)] += 1; });
   const rows = visible
@@ -198,10 +195,9 @@ export type DirectoryRow = {
   daysLeft?: number;
 };
 
-export function verifiedSkills(qsl: Qsl): CertifiedSkillView[] {
+export function assessedSkills(qsl: Qsl): CertifiedSkillView[] {
   const names = skillNames(qsl);
-  const verification = qsl.verifications[qsl.verifications.length - 1];
-  return (verification?.decisions ?? []).map(item => ({ skillId: item.skillId, name: names.get(item.skillId) ?? item.skillId, level: item.verifiedLevel }));
+  return qsl.assessedRatings.map(item => ({ skillId: item.skillId, name: names.get(item.skillId) ?? item.skillId, level: item.level }));
 }
 
 export function toDirectory(qsl: Qsl): DirectoryRow {
@@ -209,7 +205,7 @@ export function toDirectory(qsl: Qsl): DirectoryRow {
   const listing = qsl.enrollment!;
   return {
     id: qsl.id, qslNo: qsl.qslNo, listingNo: listing.listingNo, supplierId: supplier.id, supplierName: supplier.name, country: supplier.country, category: qsl.category,
-    scopeType: listing.scopeType, scopeDetail: listing.scopeDetail, level: listing.level, skills: verifiedSkills(qsl),
+    scopeType: listing.scopeType, scopeDetail: listing.scopeDetail, level: listing.level, skills: assessedSkills(qsl),
     effectiveDate: listing.effectiveDate, expiryDate: listing.expiryDate, publishedAt: listing.enrolledAt, publishedBy: listing.publishedBy, standing: standingOf(qsl)!, validity: validityOf(qsl)!,
     validityMonths: validityMonthsFor(qsl.category, getSnapshot(qsl).form.data.validityMonths), scopeChanges: listing.scopeHistory.length - 1, extensions: qsl.extensions.length,
     daysLeft: listing.expiryDate ? daysBetween(todayIso(), listing.expiryDate) : undefined,
@@ -233,21 +229,6 @@ export function listDirectory(actor: Actor, filter: { search?: string; category?
   const counts: Record<Standing, number> = { Published: 0, Expiring: 0, Expired: 0, Suspended: 0, Withdrawn: 0 };
   all.forEach(row => { counts[row.standing] += 1; });
   return { rows, counts, total: all.length };
-}
-
-// ---------------------------------------------------------------- Dashboard
-
-// Counts for the list header. Portfolio-wide figures live on the main Dashboard overview.
-export function getMiniDashboard(actor: Actor) {
-  const visible = visibleQsls(actor);
-  const enrolled = latestEnrolled(actor).map(toDirectory);
-  return clone({
-    counts: {
-      inProcess: visible.filter(isOpen).length,
-      expiring: enrolled.filter(row => row.standing !== 'Withdrawn' && (row.validity === 'Expiring' || row.validity === 'Expired')).length,
-      suspended: enrolled.filter(row => row.standing === 'Suspended').length,
-    },
-  });
 }
 
 // ---------------------------------------------------------------- Expiry and requalification
@@ -355,13 +336,11 @@ export function getSheet(actor: Actor, id: string) {
   }));
   const items = sections.flatMap(section => section.items);
   const answered = snapshot.criteria.filter(criteria => isAnswered(qsl, criteria)).length;
-  const verification = qsl.verifications[qsl.verifications.length - 1];
   const skills = snapshot.skills.map(skill => {
-    const decision = verification?.decisions.find(item => item.skillId === skill.id);
+    const assessed = qsl.assessedRatings.find(item => item.skillId === skill.id);
     return {
       id: skill.id, name: skill.name, self: qsl.selfRatings.find(item => item.skillId === skill.id)?.level, selfComment: qsl.selfRatings.find(item => item.skillId === skill.id)?.comment,
-      proposed: staff ? qsl.proposedRatings.find(item => item.skillId === skill.id)?.level : undefined, proposedComment: staff ? qsl.proposedRatings.find(item => item.skillId === skill.id)?.comment : undefined,
-      verified: staff ? decision?.verifiedLevel : undefined, action: staff ? decision?.action : undefined, verifierComment: staff ? decision?.comment : undefined,
+      assessed: staff ? assessed?.level : undefined, assessedComment: staff ? assessed?.comment : undefined,
     };
   });
   return clone({
@@ -372,7 +351,6 @@ export function getSheet(actor: Actor, id: string) {
     infoRequest: qsl.infoRequest && !qsl.infoRequest.resolvedAt ? qsl.infoRequest.message : undefined,
     preReview: staff ? qsl.preReview : undefined, sample: staff ? qsl.sample : undefined, documents: qsl.documents,
     recommended: staff ? qsl.recommended : undefined, evaluationSummary: staff ? qsl.evaluationSummary : '', internalNote: staff ? qsl.internalNote : '',
-    verificationComments: staff ? verification?.comments ?? '' : '', verifierName: staff ? verification?.verifierName : undefined,
     missingForApproval: staff ? missingForApproval(qsl, snapshot) : [], nextAction: nextActionFor(actor, qsl), approver: userName(qsl.approverId), assessor: userName(qsl.assessorId),
     separateRule: getStore().settings.separateAssessorApprover, assessedByCurrentUser: qsl.assessedBy === actor.id && actor.role !== 'Admin',
     validityMonths: validityMonthsFor(qsl.category, snapshot.form.data.validityMonths),
@@ -397,7 +375,6 @@ export function getDetail(actor: Actor, id: string) {
   const history = store.history.filter(item => item.qslId === qsl.id && (staff || !item.internal)).sort((a, b) => a.at.localeCompare(b.at));
   const otherRounds = store.qsls.filter(item => item.id !== qsl.id && item.supplierId === qsl.supplierId && item.category === qsl.category && canViewQsl(actor, item))
     .sort((a, b) => b.round - a.round).map(item => ({ id: item.id, qslNo: item.qslNo, round: item.round, statusLabel: statusLabel[item.status], result: item.result, validity: validityOf(item) }));
-  const verification = qsl.verifications[qsl.verifications.length - 1];
   const sk = snapshot?.skills ?? [];
   return clone({
     row, supplier: { id: supplier.id, name: supplier.name, taxId: supplier.taxId, country: supplier.country }, category: qsl.category, round: qsl.round, previousNo: store.qsls.find(item => item.id === qsl.previousQslId)?.qslNo,
@@ -405,8 +382,8 @@ export function getDetail(actor: Actor, id: string) {
     decision: qsl.decision ? { ...qsl.decision, reason: staff ? qsl.decision.reason : '' } : undefined,
     dates: { createdAt: qsl.createdAt, submittedAt: qsl.submittedAt, assessedAt: qsl.assessedAt, approvedAt: qsl.decision?.at, effectiveDate: qsl.decision?.effectiveDate, expiryDate: qsl.decision?.expiryDate },
     people: { coordinator: userName(qsl.coordinatorId), assessor: userName(qsl.assessorId), approver: userName(qsl.approverId) },
-    ratings: staff ? sk.map(skill => ({ name: skill.name, self: qsl.selfRatings.find(item => item.skillId === skill.id)?.level, proposed: qsl.proposedRatings.find(item => item.skillId === skill.id)?.level, verified: verification?.decisions.find(item => item.skillId === skill.id)?.verifiedLevel })) : [],
-    verifiedSkills: verifiedSkills(qsl), useSkillLevel: snapshot?.useSkillLevel ?? false,
+    ratings: staff ? sk.map(skill => ({ name: skill.name, self: qsl.selfRatings.find(item => item.skillId === skill.id)?.level, assessed: qsl.assessedRatings.find(item => item.skillId === skill.id)?.level })) : [],
+    assessedSkills: assessedSkills(qsl), useSkillLevel: snapshot?.useSkillLevel ?? false,
     criteriaResults: staff ? qsl.evaluations.map(item => ({ name: names.get(item.criteriaId) ?? item.criteriaId, verdict: item.verdict, comment: item.comment })) : [],
     evaluationSummary: staff ? qsl.evaluationSummary : '', internalNote: staff ? qsl.internalNote : '', preReview: staff ? qsl.preReview : undefined, sample: staff ? qsl.sample : undefined,
     approvals: staff ? qsl.approvals : [], suspensions: staff ? qsl.suspensions : [], extensions: staff ? qsl.extensions : [],
@@ -414,6 +391,22 @@ export function getDetail(actor: Actor, id: string) {
     documents: qsl.documents, evidence: staff ? qsl.evidence.map(item => ({ criteria: names.get(item.criteriaId) ?? item.criteriaId, fileName: item.fileName })) : [],
     history: history.map(item => ({ at: item.at, action: item.action, by: item.byName, role: item.role, note: item.note })), otherRounds, suspended: isSuspended(qsl),
     nextAction: nextActionFor(actor, qsl), canReassess: (actor.role === 'Coordinator' || actor.role === 'Admin') && isApproved(qsl),
+    portal: portalView(qsl, snapshot),
+  });
+}
+
+// Skills the supplier will be asked to rate, taken from the selected assessment form (for the request preview).
+export function getFormSkills(actor: Actor, formId: string) {
+  assertCan(actor, 'qsl.create');
+  const store = getStore();
+  const form = store.forms.find(item => item.id === formId);
+  const version = form && publishedVersion(form);
+  if (!version) return [];
+  return version.data.sections.flatMap(section => section.items).flatMap(item => {
+    const entity = store.criteria.find(criteria => criteria.id === item.criteriaId);
+    const pinned = entity && getVersion(entity, item.criteriaVersion);
+    if (!entity || !pinned) return [];
+    return [{ id: entity.id, group: store.criteriaGroups.find(group => group.id === pinned.data.groupId)?.name ?? pinned.data.groupId, name: pinned.data.name, source: entity.kind === 'Standard' ? 'Central Standard' : 'Buyer Custom', mandatory: item.required, evidenceRequired: pinned.data.evidenceRequired }];
   });
 }
 
@@ -452,7 +445,7 @@ export function getRequestOptions(actor: Actor) {
     return { id: form.id, label: `${version.data.name} v${version.version}`, categories: version.data.categories };
   });
   return clone({
-    suppliers: suppliers.filter(item => supplierCategory(item.id)).map(item => ({ id: item.id, name: item.name, category: supplierCategory(item.id) })),
+    suppliers: suppliers.filter(item => supplierCategory(item.id)).map(item => ({ id: item.id, name: item.name, category: supplierCategory(item.id), buyerUnit: item.businessUnit ?? '', hasOpenRound: store.qsls.some(qsl => qsl.supplierId === item.id && qsl.category === supplierCategory(item.id) && isOpen(qsl)) })),
     categories: categoriesFor(), forms,
     coordinators: store.users.filter(user => store.settings.coordinatorIds.includes(user.id)),
     assessors: store.users.filter(user => store.settings.assessorIds.includes(user.id)),
@@ -479,7 +472,7 @@ export function getSupplierQualification(actor: Actor, supplierId: string) {
   const mine = visibleQsls(actor).filter(qsl => qsl.supplierId === supplierId);
   const items = [...latestPerKey(mine).values()].map(qsl => ({
     id: qsl.id, qslNo: qsl.qslNo, category: qsl.category, scope: [qsl.enrollment?.scopeType ?? qsl.scopeType, qsl.enrollment?.scopeDetail ?? qsl.scopeDetail].filter(Boolean).join(' · '),
-    result: qsl.result, standing: standingOf(qsl), validity: validityOf(qsl), listed: isEnrolled(qsl), effectiveDate: qsl.decision?.effectiveDate, expiryDate: qsl.decision?.expiryDate, level: qsl.enrollment?.level, skills: verifiedSkills(qsl),
+    result: qsl.result, standing: standingOf(qsl), validity: validityOf(qsl), listed: isEnrolled(qsl), effectiveDate: qsl.decision?.effectiveDate, expiryDate: qsl.decision?.expiryDate, level: qsl.enrollment?.level, skills: assessedSkills(qsl),
   }));
   return clone({ items, open: mine.filter(isOpen).length });
 }

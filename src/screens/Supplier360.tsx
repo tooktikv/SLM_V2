@@ -15,11 +15,12 @@ import { useSourcingRevision } from '../sourcing/useSourcing';
 import SourcingModal from './sourcing/SourcingModal';
 import { StageBadge } from './sourcing/shared';
 import ContactsTab from './supplier360/ContactsTab';
+import DocumentsTab from './supplier360/DocumentsTab';
 import CompanyInformation from '../components/CompanyInformation';
 import { supplierProfiles } from '../data/contacts';
 import { Avatar, BackLink, Badge, Button, Card, CardBody, CardHeader, DetailGrid, EmptyState, Eyebrow, Grid, HeadRow, KpiGrid, Page, PageBody, PageScroll, ProgressBar, Stepper, Table, TableContainer, Tabs, Td, Tr, cx, toneFill, type StepState, type Tone } from '../components/ui';
 
-const tabs = ['Overview', 'Profile', 'Contacts', 'Capabilities', 'Qualification', 'Risk', 'Performance', 'Compliance', 'Audit', 'CAR', 'Activities'];
+const tabs = ['Overview', 'Profile', 'Contacts', 'Capabilities', 'Qualification', 'Risk', 'Performance', 'Documents', 'Compliance', 'Audit', 'CAR', 'Activities'];
 
 const lifecycleStages = ['Registered', 'Onboarded', 'Qualified', 'Approved', 'Active'];
 
@@ -364,6 +365,8 @@ export default function Supplier360({ supplier, initialTab, onBack }: { supplier
       </div>
     );
 
+    if (tab === 'Documents') return <DocumentsTab supplier={supplier} onOpenRegister={() => navigate('compliance', 'renewal', supplier.id)} />;
+
     if (tab === 'Compliance') {
       return (
         <div className="space-y-5">
@@ -380,8 +383,8 @@ export default function Supplier360({ supplier, initialTab, onBack }: { supplier
             </SectionCard>
           </Grid>
           <Card className="overflow-hidden">
-            <CardHeader title="Compliance tracker" description="Documents, contracts, audits, questionnaires, screening and sample requests" actions={<Button variant="link" onClick={() => navigate('compliance', 'monitoring', supplier.id)}>View in Compliance</Button>} />
-            <ComplianceTracker key={supplier.id} companyId={supplier.id} />
+            <CardHeader title="Compliance tracker" description="Contracts, audits, questionnaires, screening and sample requests" actions={<Button variant="link" onClick={() => navigate('compliance', 'overview', supplier.id)}>View in Compliance</Button>} />
+            <ComplianceTracker key={supplier.id} companyId={supplier.id} onOpenDocuments={() => setTab('Documents')} />
           </Card>
         </div>
       );
@@ -423,7 +426,7 @@ export default function Supplier360({ supplier, initialTab, onBack }: { supplier
             <li key={activity.date + activity.event} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line-subtle py-3 last:border-0">
               <div className="w-24 text-caption text-ink-muted">{activity.date}</div>
               <Avatar initials={activity.area.slice(0, 2).toUpperCase()} />
-              <div className="min-w-0 flex-1"><div className="text-body font-medium text-ink">{activity.event}</div><div className="mt-0.5 text-caption text-ink-muted">Updated by System · {activity.area}</div></div>
+              <div className="min-w-0 flex-1"><div className="text-body font-medium text-ink">{activity.event}</div><div className="mt-0.5 text-caption text-ink-muted">{`Updated by System · ${activity.area}`}</div></div>
               <Button variant="link">View details</Button>
             </li>
           ))}
@@ -454,7 +457,7 @@ export default function Supplier360({ supplier, initialTab, onBack }: { supplier
               </div>
             </div>
             <div className="flex gap-2">
-              <Button size="md" onClick={() => setSourcingOpen(true)}>{sourcing ? 'Manage sourcing' : 'Mark as interested'}</Button>
+              <Button size="md" onClick={() => setSourcingOpen(true)}>{sourcing ? 'Manage sourcing' : 'Add to sourcing'}</Button>
               <Button size="md">Edit profile</Button>
             </div>
           </div>

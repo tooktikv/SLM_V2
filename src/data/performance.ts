@@ -76,7 +76,7 @@ export function scopeView(category: string) {
 
 const average = (rows: PerfScores[], key: keyof PerfScores) => Math.round(rows.reduce((sum, row) => sum + row[key], 0) / rows.length);
 
-export function categorySummary(category: string) {
+function categorySummary(category: string) {
   const rows = performanceSuppliers.filter(supplier => supplier.category === category);
   const trend = scopeExtras[category].trend;
   return {

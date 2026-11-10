@@ -38,7 +38,7 @@ function SupplierDetail({ actor, row, onClose, onProfile }: { actor: Actor; row:
       </div>
       <div>
         <h3 className="mb-3 text-sm font-semibold text-ink">Capability reference</h3>
-        <div className="flex flex-wrap gap-2">{row.skills.length ? row.skills.map(skill => <Badge key={skill.skillId}>{skill.name} · Level {skill.level}</Badge>) : <span className="text-caption text-ink-muted">No verified skill rating</span>}</div>
+        <div className="flex flex-wrap gap-2">{row.skills.length ? row.skills.map(skill => <Badge key={skill.skillId}>{skill.name} · Level {skill.level}</Badge>) : <span className="text-caption text-ink-muted">No assessed skill rating</span>}</div>
       </div>
       <div className="flex justify-end gap-2 border-t border-line pt-4">
         {actor.role !== 'Buyer' && <Button onClick={() => onProfile(row.supplierId)}>Open supplier profile</Button>}
@@ -95,7 +95,7 @@ export function OverviewTab({ actor, onGo, onProfile }: { actor: Actor; onGo: (s
       <Card className="overflow-hidden">
         <TableContainer>
           <Table minWidth={980}>
-            <HeadRow columns={['QSL ID', 'Supplier', 'Category / Scope', 'Level / Verified skills', 'Effective - expiry', 'Status', '']} />
+            <HeadRow columns={['QSL ID', 'Supplier', 'Category / Scope', 'Level / Assessed skills', 'Effective - expiry', 'Status', '']} />
             <tbody>
               {rows.map(row => (
                 <Tr key={row.id}>

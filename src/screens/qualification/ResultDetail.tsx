@@ -3,10 +3,11 @@ import { getDetail, type NextAction } from '../../qsl/services/queries';
 import { statusLabel, supplierStatusLabel, typeLabel, verdictLabel } from '../../qsl/labels';
 import { useQslQuery } from '../../qsl/useQsl';
 import { Badge, Button, Callout, Card, CardHeader, DetailGrid, EmptyState, Eyebrow, Grid, HeadRow, Stepper, Table, TableContainer, Td, Tr, type StepState } from '../../components/ui';
+import { InfoRequestsCard, PortalRequestCards, RateCardCard } from './PortalPanels';
 import { LevelBadge, ResultBadge, StandingBadge, ValidityBadge, formatDate, statusTone } from './shared';
 
-const STEPS = ['Request', 'Pre-Qualification', 'Assessment', 'Skill Verification', 'Approval', 'QSL eligible'];
-const stepOf = { Draft: 0, WaitingSupplier: 0, PreQualReview: 1, SampleEvaluation: 1, WaitingAssessment: 2, InfoRequested: 2, WaitingVerification: 3, WaitingApproval: 4, Completed: 5 } as const;
+const STEPS = ['Request', 'Pre-Qualification', 'Assessment', 'Approval', 'QSL eligible'];
+const stepOf = { Draft: 0, WaitingSupplier: 0, PreQualReview: 1, SampleEvaluation: 1, WaitingAssessment: 2, InfoRequested: 2, WaitingApproval: 3, Completed: 4 } as const;
 
 export function ResultDetail({ actor, id, onOpen, onContinue, onReassess, onProfile }: {
   actor: Actor;
@@ -67,6 +68,10 @@ export function ResultDetail({ actor, id, onOpen, onContinue, onReassess, onProf
             </div>
           </Card>
 
+          <PortalRequestCards portal={data.portal} category={data.category} scope={row.scope} dueDate={row.dueDate} qslNo={row.qslNo} />
+          <RateCardCard portal={data.portal} />
+          <InfoRequestsCard portal={data.portal} />
+
           {data.enrollment && (
             <Card>
               <CardHeader title="QSL listing" description="Published scope, validity and qualification level" />
@@ -78,15 +83,15 @@ export function ResultDetail({ actor, id, onOpen, onContinue, onReassess, onProf
                   { label: 'Qualification Level', value: <LevelBadge level={data.level} /> }, { label: 'QSL status', value: <StandingBadge standing={data.standing} /> },
                   ...(data.enrollment.withdrawal ? [{ label: 'Withdrawn', value: `${formatDate(data.enrollment.withdrawal.at)} · ${data.enrollment.withdrawal.reason}`, wide: true }] : []),
                 ]} />
-                {data.verifiedSkills.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{data.verifiedSkills.map(skill => <Badge key={skill.skillId} small>{skill.name} · Level {skill.level}</Badge>)}</div>}
+                {data.assessedSkills.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{data.assessedSkills.map(skill => <Badge key={skill.skillId} small>{skill.name} · Level {skill.level}</Badge>)}</div>}
               </div>
             </Card>
           )}
 
           {staff && data.ratings.length > 0 && (
             <Card className="overflow-hidden">
-              <CardHeader title="Skill Rating" description="Self-rating, proposed and verified ratings are stored separately" />
-              <TableContainer><Table minWidth={480}><HeadRow columns={['Skill', 'Supplier self', 'Proposed', 'Verified']} /><tbody>{data.ratings.map(rating => <Tr key={rating.name}><Td dense>{rating.name}</Td><Td dense><LevelBadge level={rating.self} /></Td><Td dense><LevelBadge level={rating.proposed} /></Td><Td dense><LevelBadge level={rating.verified} /></Td></Tr>)}</tbody></Table></TableContainer>
+              <CardHeader title="Skill Rating" description="The supplier self-rating and the assessor rating are stored separately" />
+              <TableContainer><Table minWidth={480}><HeadRow columns={['Skill', 'Supplier self', 'Assessed']} /><tbody>{data.ratings.map(rating => <Tr key={rating.name}><Td dense>{rating.name}</Td><Td dense><LevelBadge level={rating.self} /></Td><Td dense><LevelBadge level={rating.assessed} /></Td></Tr>)}</tbody></Table></TableContainer>
             </Card>
           )}
 

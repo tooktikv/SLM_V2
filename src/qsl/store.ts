@@ -25,7 +25,6 @@ const users: QslUser[] = [
   { id: 'USR-C2', name: 'Marcus Patel', role: 'Coordinator' },
   { id: 'USR-A1', name: 'Daniel Okoye', role: 'Assessor' },
   { id: 'USR-A2', name: 'Mei Tanaka', role: 'Assessor' },
-  { id: 'USR-V1', name: 'Elena Fischer', role: 'Verifier' },
   { id: 'USR-P1', name: 'Sofia Alvarez', role: 'Approver' },
   { id: 'USR-P2', name: 'Henrik Larsen', role: 'Approver' },
 ];

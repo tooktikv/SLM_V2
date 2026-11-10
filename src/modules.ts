@@ -43,11 +43,9 @@ export const modules: ModuleDef[] = [
   },
   {
     id: 'risk', no: 6, label: 'Risk Management', group: 'Monitor', Icon: ShieldAlertIcon,
-    sections: fixed({ id: 'overview', label: 'Risk Overview' }, { id: 'assessment', label: 'Risk Assessment' }, { id: 'monitoring', label: 'Monitoring & Alerts' }),
   },
   {
     id: 'compliance', no: 7, label: 'Compliance & Monitoring', group: 'Monitor', Icon: ClipboardCheckIcon,
-    sections: fixed({ id: 'monitoring', label: 'Supplier Monitoring' }, { id: 'documents', label: 'Document Register' }, { id: 'findings', label: 'Findings & History' }),
   },
   { id: 'performance', no: 8, label: 'Performance Management', group: 'Monitor', Icon: TrendingUpIcon },
   { id: 'relationship', no: 9, label: 'Contacts & Relationship', group: 'Relationships', Icon: UsersIcon },
@@ -64,8 +62,10 @@ const findModule = (screen: Screen): ModuleDef | undefined => modules.find(item 
 export const sectionsOf = (screen: Screen, role: Role): SectionDef[] => findModule(screen)?.sections?.(role) ?? [];
 
 // Resolves a requested section to one the role can see, falling back to the first.
+// Single-page modules keep the request so a deep link can pick a tab.
 export function resolveSection(screen: Screen, role: Role, requested?: string): string {
   const list = sectionsOf(screen, role);
+  if (!list.length) return requested ?? '';
   return list.find(item => item.id === requested)?.id ?? list[0]?.id ?? '';
 }
 

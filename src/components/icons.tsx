@@ -132,6 +132,8 @@ export const SearchIcon = createIcon(
   </>,
 );
 
+export const UploadIcon = createIcon(<path d="M12 16V4m0 0 4 4m-4-4L8 8M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />);
+export const SparklesIcon = createIcon(<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8L12 3zM19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7L19 15z" />);
 export const ArrowLeftIcon = createIcon(<path d="m12 19-7-7 7-7M19 12H5" />);
 export const ArrowRightIcon = createIcon(<path d="M5 12h14m-7-7 7 7-7 7" />);
 export const ChevronRightIcon = createIcon(<path d="m9 18 6-6-6-6" />);
